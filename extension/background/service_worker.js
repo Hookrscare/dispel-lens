@@ -1,10 +1,11 @@
 /**
  * Dispel Lens — Background Service Worker.
- * Manages configuration storage, dispel.cloud session authentication handshake,
- * guest tier quota tracking, and global scan cache.
+ * Handles configuration storage, dispel.cloud session authentication handshake,
+ * guest tier quota tracking, and background API proxying (bypasses Mixed Content on HTTPS pages).
  */
 
 const DEFAULT_SERVER_URL = "http://localhost:8000";
+const TUNNEL_SERVER_URL = "https://fantastic-event-utilize-let.trycloudflare.com";
 
 // Initialize default settings on installation
 chrome.runtime.onInstalled.addListener(async () => {
@@ -25,11 +26,62 @@ chrome.runtime.onInstalled.addListener(async () => {
   console.log("[Dispel Lens Service Worker] Initialized.");
 });
 
+// Helper to determine active working server URL (tries localhost, fallbacks to tunnel)
+async function getActiveServerUrl() {
+  const { serverUrl = DEFAULT_SERVER_URL } = await chrome.storage.local.get("serverUrl");
+  try {
+    const res = await fetch(`${serverUrl}/api/v1/health`, { method: "GET", signal: AbortSignal.timeout(1500) });
+    if (res.ok) return serverUrl;
+  } catch (e) {}
+
+  try {
+    const res = await fetch(`${TUNNEL_SERVER_URL}/api/v1/health`, { method: "GET", signal: AbortSignal.timeout(2500) });
+    if (res.ok) return TUNNEL_SERVER_URL;
+  } catch (e) {}
+
+  return serverUrl;
+}
+
 // Message Passing Listener
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   (async () => {
     try {
-      // 1. Dispel Auth Session Handshake
+      // 1. Frame Burst Inference Proxy (bypasses browser mixed content on YouTube / TikTok)
+      if (message.type === "ANALYZE_BURST" || message.action === "ANALYZE_BURST") {
+        const activeUrl = await getActiveServerUrl();
+        const { dispelToken = null } = await chrome.storage.local.get("dispelToken");
+
+        const headers = { "Content-Type": "application/json" };
+        if (dispelToken) {
+          headers["Authorization"] = `Bearer ${dispelToken}`;
+        }
+
+        try {
+          const res = await fetch(`${activeUrl}/api/v1/analyze`, {
+            method: "POST",
+            headers: headers,
+            body: JSON.stringify({
+              video_id: message.payload.videoId || "social_video",
+              platform: message.payload.platform || "web",
+              timestamp_sec: message.payload.timestamp || 0.0,
+              frames: message.payload.frames,
+              audio_sample_base64: message.payload.audioSample || null
+            })
+          });
+
+          if (res.ok) {
+            const data = await res.json();
+            sendResponse({ success: true, data: data });
+          } else {
+            sendResponse({ success: false, error: `Inference server returned HTTP ${res.status}` });
+          }
+        } catch (fetchErr) {
+          sendResponse({ success: false, error: `Backend connection failed: ${fetchErr.message}` });
+        }
+        return;
+      }
+
+      // 2. Dispel Auth Session Handshake
       if (message.action === "SET_SESSION" || message.type === "SET_SESSION") {
         await chrome.storage.local.set({
           dispelToken: message.token,
@@ -47,14 +99,14 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return;
       }
 
-      // 2. Health & Backend Check
+      // 3. Health & Backend Check
       if (message.type === "CHECK_BACKEND_STATUS") {
-        const { serverUrl = DEFAULT_SERVER_URL } = await chrome.storage.local.get("serverUrl");
+        const activeUrl = await getActiveServerUrl();
         try {
-          const res = await fetch(`${serverUrl}/api/v1/health`, { method: "GET" });
+          const res = await fetch(`${activeUrl}/api/v1/health`, { method: "GET" });
           if (res.ok) {
             const data = await res.json();
-            sendResponse({ success: true, online: true, data });
+            sendResponse({ success: true, online: true, activeUrl, data });
           } else {
             sendResponse({ success: false, online: false, error: `HTTP ${res.status}` });
           }
@@ -64,7 +116,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return;
       }
 
-      // 3. Save Scan Result to Local History
+      // 4. Save Scan Result to Local History
       if (message.type === "SAVE_SCAN_RESULT") {
         const { scanHistory = [], guestScansUsed = 0, userTier = "guest" } = 
           await chrome.storage.local.get(["scanHistory", "guestScansUsed", "userTier"]);
@@ -89,7 +141,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return;
       }
 
-      // 4. General Settings
+      // 5. General Settings
       if (message.type === "GET_SETTINGS") {
         const settings = await chrome.storage.local.get(["serverUrl", "autoScan", "sensitivity", "userTier", "guestScansUsed"]);
         sendResponse({ success: true, settings });

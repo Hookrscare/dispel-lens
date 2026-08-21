@@ -1,23 +1,19 @@
 /**
- * Platform DOM Observer for YouTube and TikTok.
- * Uses MutationObserver and event listeners to automatically detect HTML5 <video> elements,
- * inject floating verification HUD badges, and coordinate frame burst extraction.
+ * Dispel Lens — Platform DOM Observer for YouTube and TikTok.
+ * Automatically discovers active HTML5 <video> elements across SPA navigation,
+ * injects ambient verification badges, and triggers sequential frame burst analysis.
  */
 
 (function () {
-  console.log("[AI Video Identifier] Initializing DOM Observer...");
+  console.log("[Dispel Lens] Content script active.");
 
   const grabber = new window.VideoFrameGrabber();
   const overlay = new window.OverlayUI();
 
-  grabber.initWebSocket();
-
-  // Track active elements
   const hookedVideos = new WeakSet();
   let currentActiveVideo = null;
   let currentBadge = null;
 
-  // Platform detection
   const isYouTube = window.location.hostname.includes("youtube.com");
   const isTikTok = window.location.hostname.includes("tiktok.com");
 
@@ -37,14 +33,14 @@
   }
 
   function triggerAnalysis(videoEl, container, platform, videoId) {
-    if (!videoEl || videoEl.readyState < 2) return;
+    if (!videoEl) return;
 
     // Reset badge state to scanning
     currentBadge = overlay.createBadge(container, () => {
       triggerAnalysis(videoEl, container, platform, videoId);
     });
 
-    const heatmapCanvas = overlay.createHeatmapOverlay(container);
+    overlay.createHeatmapOverlay(container);
 
     // Grabber callbacks
     grabber.onFastTierResult = (fastData) => {
@@ -76,42 +72,44 @@
   function hookYouTubePlayer() {
     const playerContainer = document.querySelector("#movie_player") || 
       document.querySelector("ytd-watch-flexy") || 
-      document.querySelector("ytd-reel-video-renderer[is-active]");
+      document.querySelector("ytd-reel-video-renderer[is-active]") ||
+      document.querySelector(".html5-video-player");
 
-    if (!playerContainer) return;
+    const videoEl = document.querySelector("video.html5-main-video") || document.querySelector("video");
+    if (!videoEl) return;
 
-    const videoEl = playerContainer.querySelector("video");
-    if (!videoEl || hookedVideos.has(videoEl)) return;
+    const targetContainer = playerContainer || videoEl.parentElement || document.body;
 
-    hookedVideos.add(videoEl);
-    currentActiveVideo = videoEl;
+    if (!hookedVideos.has(videoEl)) {
+      hookedVideos.add(videoEl);
+      currentActiveVideo = videoEl;
 
-    // Ensure relative positioning on player for badge & heatmap overlay
-    if (getComputedStyle(playerContainer).position === "static") {
-      playerContainer.style.position = "relative";
-    }
+      if (targetContainer && getComputedStyle(targetContainer).position === "static") {
+        targetContainer.style.position = "relative";
+      }
 
-    const videoId = getYouTubeVideoId();
-    currentBadge = overlay.createBadge(playerContainer, () => {
-      triggerAnalysis(videoEl, playerContainer, "youtube", videoId);
-    });
-
-    // Auto-trigger on play
-    videoEl.addEventListener("play", () => {
-      chrome.storage.local.get("autoScan", ({ autoScan = true }) => {
-        if (autoScan) {
-          setTimeout(() => {
-            triggerAnalysis(videoEl, playerContainer, "youtube", getYouTubeVideoId());
-          }, 800);
-        }
+      const videoId = getYouTubeVideoId();
+      currentBadge = overlay.createBadge(targetContainer, () => {
+        triggerAnalysis(videoEl, targetContainer, "youtube", getYouTubeVideoId());
       });
-    });
 
-    // Also trigger if already playing
-    if (!videoEl.paused && videoEl.currentTime > 0) {
-      setTimeout(() => {
-        triggerAnalysis(videoEl, playerContainer, "youtube", videoId);
-      }, 500);
+      // Auto-trigger on video play event
+      videoEl.addEventListener("play", () => {
+        chrome.storage.local.get("autoScan", ({ autoScan = true }) => {
+          if (autoScan) {
+            setTimeout(() => {
+              triggerAnalysis(videoEl, targetContainer, "youtube", getYouTubeVideoId());
+            }, 600);
+          }
+        });
+      });
+
+      // If video is already playing or buffered, analyze shortly
+      if (!videoEl.paused && videoEl.currentTime > 0) {
+        setTimeout(() => {
+          triggerAnalysis(videoEl, targetContainer, "youtube", videoId);
+        }, 500);
+      }
     }
   }
 
@@ -120,9 +118,7 @@
     videoElements.forEach((videoEl) => {
       if (hookedVideos.has(videoEl)) return;
 
-      const parentContainer = videoEl.parentElement;
-      if (!parentContainer) return;
-
+      const parentContainer = videoEl.parentElement || document.body;
       hookedVideos.add(videoEl);
 
       if (getComputedStyle(parentContainer).position === "static") {
@@ -151,20 +147,23 @@
     if (isTikTok) hookTikTokFeed();
   }
 
-  // MutationObserver for Single Page Application navigation and dynamic feeds
+  // MutationObserver for Single Page Application navigation
   const observer = new MutationObserver(() => {
     scanDOM();
   });
 
-  observer.observe(document.body, {
+  observer.observe(document.documentElement, {
     childList: true,
     subtree: true
   });
 
-  // YouTube navigation event
-  window.addEventListener("yt-navigate-finish", () => {
-    setTimeout(scanDOM, 500);
-  });
+  // SPA navigation events
+  window.addEventListener("yt-navigate-finish", () => setTimeout(scanDOM, 400));
+  window.addEventListener("popstate", () => setTimeout(scanDOM, 400));
+  window.addEventListener("load", () => setTimeout(scanDOM, 400));
+
+  // Periodic safety check every 2 seconds in case SPA modifies video node
+  setInterval(scanDOM, 2000);
 
   // Initial scan
   scanDOM();
