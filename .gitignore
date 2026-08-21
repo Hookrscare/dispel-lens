@@ -1,0 +1,23 @@
+# Virtual environments
+venv/
+env/
+.venv/
+
+# Python caches
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# Local cache stores and temporary files
+*.jsonl
+test_cache.json
+cache_store.json
+
+# Production environment secrets
+backend/.env.production
+.env
+
+# OS specific files
+.DS_Store
+Thumbs.db

@@ -1,0 +1,75 @@
+{
+  "manifest_version": 3,
+  "name": "Dispel Lens - AI Video Detector",
+  "version": "1.0.0",
+  "description": "Real-time AI and deepfake detection for YouTube and TikTok by dispel.cloud",
+  "permissions": [
+    "storage"
+  ],
+  "host_permissions": [
+    "*://dispel.cloud/*",
+    "*://*.dispel.cloud/*",
+    "*://*.youtube.com/*",
+    "*://*.tiktok.com/*",
+    "http://localhost:8000/*",
+    "http://127.0.0.1:8000/*"
+  ],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "Dispel Lens",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "48": "icons/icon-48.png",
+      "128": "icons/icon-128.png"
+    }
+  },
+  "background": {
+    "service_worker": "background/service_worker.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://dispel.cloud/*",
+        "*://*.dispel.cloud/*",
+        "http://localhost:8000/*"
+      ],
+      "js": [
+        "auth-bridge.js"
+      ],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "*://*.youtube.com/*",
+        "*://*.tiktok.com/*"
+      ],
+      "js": [
+        "content/frame_grabber.js",
+        "content/overlay_ui.js",
+        "content/dom_observer.js"
+      ],
+      "css": [
+        "content/overlay_ui.css"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "16": "icons/icon-16.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "icons/*",
+        "content/*"
+      ],
+      "matches": [
+        "*://*.youtube.com/*",
+        "*://*.tiktok.com/*",
+        "*://dispel.cloud/*"
+      ]
+    }
+  ]
+}
