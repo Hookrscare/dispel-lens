@@ -98,13 +98,33 @@ class EnsembleEvaluator:
         else:
             w_spatial, w_rppg, w_temporal, w_physics, w_audio = 0.40, 0.0, 0.35, 0.25, 0.0
 
-        raw_ai_prob = (
+        # Baseline linear weighted combination
+        weighted_score = (
             w_spatial * spatial_res["score"] +
-            w_rppg * rppg_res["score"] +
+            w_rppg * (rppg_res["score"] if face_present else 0.0) +
             w_temporal * temporal_res["score"] +
             w_physics * physics_res["score"] +
-            w_audio * audio_res["score"]
+            w_audio * (audio_res["score"] if audio_present else 0.0)
         )
+
+        # Collect individual high-confidence anomaly spikes
+        active_vector_scores = [
+            spatial_res["score"],
+            rppg_res["score"] if (face_present and rppg_res.get("biological_signals_present") is False and rppg_res.get("snr_db", 0.0) < -8.0) else 0.0,
+            temporal_res["score"],
+            physics_res["score"],
+            audio_res["score"] if audio_present else 0.0
+        ]
+        max_vector_score = max(active_vector_scores)
+
+        # Non-linear forensic boost: if any vector independently detects a definitive anomaly (>= 0.60),
+        # it decisively elevates the final ensemble probability
+        if max_vector_score >= 0.70:
+            raw_ai_prob = max_vector_score
+        elif max_vector_score >= 0.55:
+            raw_ai_prob = max(weighted_score * 1.4, max_vector_score * 0.90)
+        else:
+            raw_ai_prob = weighted_score
 
         # C2PA override if definitive cryptographic claim exists
         if c2pa_res.get("synthetic_claim"):
@@ -112,7 +132,7 @@ class EnsembleEvaluator:
         elif c2pa_res.get("watermark_detected"):
             raw_ai_prob = max(raw_ai_prob, 0.92)
 
-        ai_prob = float(np.clip(raw_ai_prob, 0.0, 1.0))
+        ai_prob = float(np.clip(raw_ai_prob, 0.02, 0.99))
 
         # Determine Verdict & Shield Badge (Decisive Calibration)
         if ai_prob >= 0.55:

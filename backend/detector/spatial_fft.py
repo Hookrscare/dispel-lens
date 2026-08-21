@@ -114,9 +114,11 @@ class SpatialFFTDetector:
         sym_diff = np.mean(np.abs(q1 - np.fliplr(q2))) + np.mean(np.abs(q4 - np.flipud(q1)))
         quadrant_symmetry = float(1.0 / (1.0 + sym_diff))
 
-        # Local patch level checkerboard detection
+        # Local patch level checkerboard detection (512x512 / 480x270 evaluation)
         patch_size = 128
         heatmap_boxes = []
+        patch_peak_ratios = []
+
         for py in range(0, h - patch_size + 1, patch_size // 2):
             for px in range(0, w - patch_size + 1, patch_size // 2):
                 patch = gray[py:py + patch_size, px:px + patch_size]
@@ -128,8 +130,11 @@ class SpatialFFTDetector:
                 p_high_mask = p_dist >= (p_center * self.high_freq_cutoff_ratio)
                 p_high_vals = pmag[p_high_mask]
                 if len(p_high_vals) > 0:
-                    p_peak_ratio = np.max(p_high_vals) / (np.median(p_high_vals) + 1e-6)
-                    if p_peak_ratio > 35.0:
+                    p_median = np.median(p_high_vals) + 1e-6
+                    p_peak_ratio = float(np.max(p_high_vals) / p_median)
+                    patch_peak_ratios.append(p_peak_ratio)
+
+                    if p_peak_ratio > 25.0:
                         heatmap_boxes.append({
                             "x": int(px),
                             "y": int(py),
@@ -139,41 +144,39 @@ class SpatialFFTDetector:
                             "type": "spectral_checkerboard_artifact"
                         })
 
+        max_patch_peak = max(patch_peak_ratios) if patch_peak_ratios else 0.0
+        severe_patches = len(heatmap_boxes)
+
         # Synthetic anomaly score calculation
-        score = 0.05
+        score = 0.04
         artifacts_detected = []
 
-        if isolated_peaks > 30 and peak_prominence > 6.0:
-            score += 0.75
-            artifacts_detected.append(f"high_frequency_checkerboard_peaks ({isolated_peaks})")
-        elif isolated_peaks > 15 and peak_prominence > 4.5:
-            score += 0.45
-            artifacts_detected.append("periodic_upsampling_lattice_harmonics")
+        if severe_patches >= 6 and max_patch_peak > 35.0:
+            score = 0.88
+            artifacts_detected.append(f"neural_upsampler_checkerboard_lattice ({severe_patches} patches, {max_patch_peak:.1f}x peak)")
+        elif severe_patches >= 2 or max_patch_peak > 28.0:
+            score = 0.65
+            artifacts_detected.append(f"periodic_upsampling_lattice_harmonics ({severe_patches} patches)")
+        elif max_patch_peak > 22.0:
+            score = 0.35
+            artifacts_detected.append("minor_high_frequency_harmonic_clusters")
 
         # Check for inverted or flat spectral slope only when spectral energy exists
         if np.std(fit_y) > 0.05:
-            if slope > 0.08:  # Non-decaying or rising high frequency slope
-                score += 0.40
+            if slope > 0.12:  # Severe non-decaying or rising high frequency slope
+                score = max(score, 0.75)
                 artifacts_detected.append("unnatural_inverted_spectral_slope")
-            elif slope > -0.10 and r_corr < 0.4:
-                score += 0.20
-                artifacts_detected.append("abnormal_radial_power_distribution")
-
-        # Extreme checkerboard quadrant symmetry with prominent delta peaks
-        if quadrant_symmetry > 0.90 and isolated_peaks > 10:
-            score += 0.35
-            artifacts_detected.append("4_fold_upsampler_quadrant_symmetry")
 
         score = float(np.clip(score, 0.02, 0.99))
-        confidence = float(np.clip(abs(score - 0.5) * 2.0 + 0.4, 0.5, 0.99))
+        confidence = float(np.clip(abs(score - 0.5) * 2.0 + 0.40, 0.55, 0.99))
 
         return {
             "score": round(score, 4),
             "confidence": round(confidence, 4),
             "high_freq_ratio": round(high_freq_ratio, 4),
             "spectral_slope": round(float(slope), 4),
-            "checkerboard_peaks": isolated_peaks,
-            "peak_prominence": round(peak_prominence, 3),
+            "checkerboard_peaks": severe_patches,
+            "peak_prominence": round(max_patch_peak, 3),
             "artifacts_detected": artifacts_detected,
             "heatmap_boxes": heatmap_boxes[:8]
         }
