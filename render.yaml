@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: dispel-lens
+    runtime: docker
+    dockerfilePath: backend/Dockerfile
+    dockerContext: backend
+    plan: free
+    region: oregon
+    envVars:
+      - key: PORT
+        value: 8000
+      - key: ENVIRONMENT
+        value: production
+      - key: CORS_ORIGINS
+        value: https://dispel.cloud,https://lens.dispel.cloud,https://www.youtube.com,https://www.tiktok.com
