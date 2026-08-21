@@ -1,5 +1,6 @@
 /**
  * Dispel Lens — Popup Script.
+ * Manages active tab trigger, session authentication, and recent verification history.
  */
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -9,6 +10,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   const sensitivitySelect = document.getElementById("sensitivity-select");
   const historyList = document.getElementById("history-list");
   const clearHistoryBtn = document.getElementById("clear-history-btn");
+
+  const scanNowBtn = document.getElementById("scan-now-btn");
+  const scanStatusMsg = document.getElementById("scan-status-msg");
+  const activeScanResult = document.getElementById("active-scan-result");
+  const resVerdictLabel = document.getElementById("res-verdict-label");
+  const resVerdictSub = document.getElementById("res-verdict-sub");
+  const resVerdictScore = document.getElementById("res-verdict-score");
 
   const userTierTag = document.getElementById("user-tier-tag");
   const quotaCountLabel = document.getElementById("quota-count-label");
@@ -30,10 +38,65 @@ document.addEventListener("DOMContentLoaded", async () => {
   chrome.runtime.sendMessage({ type: "CHECK_BACKEND_STATUS" }, async (response) => {
     if (response && response.online) {
       statusDot.className = "status-dot online";
-      statusLabel.textContent = "Dispel Gateway Online";
+      statusLabel.textContent = "Dispel Online";
     } else {
       statusDot.className = "status-dot offline";
-      statusLabel.textContent = "Dispel Gateway Offline";
+      statusLabel.textContent = "Dispel Offline";
+    }
+  });
+
+  // Manual Trigger Active Tab Scan Button
+  scanNowBtn.addEventListener("click", async () => {
+    scanStatusMsg.style.display = "block";
+    scanStatusMsg.textContent = "Extracting frame burst from active video...";
+    scanNowBtn.disabled = true;
+
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      if (!tab) {
+        scanStatusMsg.textContent = "No active browser tab found.";
+        scanNowBtn.disabled = false;
+        return;
+      }
+
+      // Ensure content script is injected
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          files: ["content/frame_grabber.js", "content/overlay_ui.js", "content/dom_observer.js"]
+        });
+      } catch (e) {
+        // Already injected
+      }
+
+      // Send trigger message
+      chrome.tabs.sendMessage(tab.id, { action: "TRIGGER_ACTIVE_SCAN" }, (res) => {
+        scanStatusMsg.textContent = "Analysis running over video player...";
+        setTimeout(async () => {
+          scanStatusMsg.style.display = "none";
+          scanNowBtn.disabled = false;
+          const { scanHistory = [] } = await chrome.storage.local.get("scanHistory");
+          renderHistory(scanHistory);
+
+          if (scanHistory.length > 0) {
+            const latest = scanHistory[0];
+            const isAuth = latest.badgeColor === "GREEN";
+            const color = isAuth ? "#10B981" : "#EF4444";
+
+            activeScanResult.style.display = "block";
+            activeScanResult.style.borderColor = color;
+            resVerdictLabel.style.color = color;
+            resVerdictScore.style.color = color;
+
+            resVerdictLabel.textContent = isAuth ? "Verified Authentic Human" : "AI Synthetic Video Detected";
+            resVerdictSub.textContent = isAuth ? "High biological and physical signal coherence" : "Periodic upsampler harmonics flagged";
+            resVerdictScore.textContent = `${Math.round(latest.aiProbability * 100)}% AI`;
+          }
+        }, 1500);
+      });
+    } catch (err) {
+      scanStatusMsg.textContent = "Error: " + err.message;
+      scanNowBtn.disabled = false;
     }
   });
 
@@ -73,6 +136,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   clearHistoryBtn.addEventListener("click", async () => {
     await chrome.storage.local.set({ scanHistory: [] });
     renderHistory([]);
+    activeScanResult.style.display = "none";
   });
 
   function renderHistory(items) {

@@ -58,6 +58,37 @@ body {
   font-weight: 600;
 }
 
+.scan-primary-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 11px 16px;
+  background: linear-gradient(135deg, #00F0FF, #3B82F6);
+  color: #0B0F17;
+  border: none;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 4px 16px rgba(0, 240, 255, 0.3);
+  transition: all 0.2s;
+}
+
+.scan-primary-btn:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+
+.active-result-box {
+  margin: 10px 14px 0 14px;
+  padding: 12px 14px;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  border-radius: 10px;
+}
+
 .status-dot {
   width: 7px;
   height: 7px;

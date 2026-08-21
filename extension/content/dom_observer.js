@@ -1,54 +1,71 @@
 /**
- * Dispel Lens — Platform DOM Observer for YouTube and TikTok.
- * Automatically discovers active HTML5 <video> elements across SPA navigation,
- * injects ambient verification badges, and triggers sequential frame burst analysis.
+ * Dispel Lens — Platform DOM Observer for YouTube, TikTok, and Web Video.
+ * Automatically discovers active HTML5 <video> elements, injects ambient verification badges,
+ * and responds to extension popup click triggers.
  */
 
 (function () {
-  console.log("[Dispel Lens] Content script active.");
+  console.log("[Dispel Lens] Content script active on:", window.location.href);
 
   const grabber = new window.VideoFrameGrabber();
   const overlay = new window.OverlayUI();
 
-  const hookedVideos = new WeakSet();
-  let currentActiveVideo = null;
-  let currentBadge = null;
+  let activeVideo = null;
+  let activeBadge = null;
 
-  const isYouTube = window.location.hostname.includes("youtube.com");
-  const isTikTok = window.location.hostname.includes("tiktok.com");
+  function findActiveVideoElement() {
+    // Check YouTube main video first
+    const ytVideo = document.querySelector("video.html5-main-video") || 
+                    document.querySelector("#movie_player video") ||
+                    document.querySelector("ytd-watch-flexy video") ||
+                    document.querySelector("ytd-reel-video-renderer[is-active] video");
+    if (ytVideo) return ytVideo;
 
-  function getYouTubeVideoId() {
+    // Check TikTok / generic HTML5 video
+    const videos = Array.from(document.querySelectorAll("video"));
+    for (const v of videos) {
+      if (v.offsetWidth > 150 && v.offsetHeight > 100) {
+        return v;
+      }
+    }
+    return videos[0] || null;
+  }
+
+  function getPlatformVideoId() {
     const params = new URLSearchParams(window.location.search);
     if (params.has("v")) return params.get("v");
     if (window.location.pathname.includes("/shorts/")) {
       return window.location.pathname.split("/shorts/")[1].split("/")[0];
     }
-    return window.location.pathname;
+    return window.location.pathname || "active_web_video";
   }
 
-  function getTikTokItemId(videoEl) {
-    const feedItem = videoEl.closest('div[data-e2e="feed-item"]');
-    if (feedItem && feedItem.id) return feedItem.id;
-    return window.location.pathname;
-  }
+  function runScan(openModalWhenDone = false) {
+    const videoEl = findActiveVideoElement();
+    if (!videoEl) {
+      console.warn("[Dispel Lens] No active video element found to analyze.");
+      return;
+    }
 
-  function triggerAnalysis(videoEl, container, platform, videoId) {
-    if (!videoEl) return;
+    activeVideo = videoEl;
+    const platform = window.location.hostname.includes("youtube.com") ? "youtube" :
+                     window.location.hostname.includes("tiktok.com") ? "tiktok" : "web";
+    const videoId = getPlatformVideoId();
 
-    // Reset badge state to scanning
-    currentBadge = overlay.createBadge(container, () => {
-      triggerAnalysis(videoEl, container, platform, videoId);
-    });
+    ensureBadgeInjected();
 
-    overlay.createHeatmapOverlay(container);
+    if (activeBadge) {
+      activeBadge.className = "por-badge-container por-badge-scanning";
+      const statusText = activeBadge.querySelector(".por-badge-text");
+      if (statusText) statusText.textContent = "Dispel: Analyzing...";
+    }
 
-    // Grabber callbacks
     grabber.onFastTierResult = (fastData) => {
-      overlay.updateBadgeFastTier(currentBadge, fastData);
+      overlay.updateBadgeFastTier(activeBadge, fastData);
     };
 
     grabber.onDeepTierResult = (deepData) => {
-      overlay.updateBadgeDeepTier(currentBadge, deepData);
+      overlay.updateBadgeDeepTier(activeBadge, deepData);
       overlay.renderHeatmap(deepData.heatmap_boxes, videoEl);
 
       // Save scan to extension storage history
@@ -63,108 +80,77 @@
           badge_color: deepData.badge_color
         }
       });
+
+      if (openModalWhenDone) {
+        overlay.openModal(deepData, () => runScan(true));
+      }
     };
 
-    // Capture burst
     grabber.captureBurst(videoEl, videoId, platform);
   }
 
-  function hookYouTubePlayer() {
-    const playerContainer = document.querySelector("#movie_player") || 
-      document.querySelector("ytd-watch-flexy") || 
-      document.querySelector("ytd-reel-video-renderer[is-active]") ||
-      document.querySelector(".html5-video-player");
+  function ensureBadgeInjected() {
+    if (document.querySelector(".por-badge-container")) {
+      activeBadge = document.querySelector(".por-badge-container");
+      return activeBadge;
+    }
 
-    const videoEl = document.querySelector("video.html5-main-video") || document.querySelector("video");
+    // Attach to YouTube player container or document.body
+    const playerContainer = document.querySelector("#movie_player") || 
+      document.querySelector(".html5-video-player") || 
+      document.body;
+
+    activeBadge = overlay.createBadge(playerContainer, () => {
+      runScan(true);
+    });
+
+    overlay.createHeatmapOverlay(playerContainer);
+    return activeBadge;
+  }
+
+  function scanDOM() {
+    const videoEl = findActiveVideoElement();
     if (!videoEl) return;
 
-    const targetContainer = playerContainer || videoEl.parentElement || document.body;
+    if (!document.querySelector(".por-badge-container")) {
+      ensureBadgeInjected();
+    }
 
-    if (!hookedVideos.has(videoEl)) {
-      hookedVideos.add(videoEl);
-      currentActiveVideo = videoEl;
+    if (videoEl !== activeVideo) {
+      activeVideo = videoEl;
 
-      if (targetContainer && getComputedStyle(targetContainer).position === "static") {
-        targetContainer.style.position = "relative";
-      }
-
-      const videoId = getYouTubeVideoId();
-      currentBadge = overlay.createBadge(targetContainer, () => {
-        triggerAnalysis(videoEl, targetContainer, "youtube", getYouTubeVideoId());
-      });
-
-      // Auto-trigger on video play event
       videoEl.addEventListener("play", () => {
         chrome.storage.local.get("autoScan", ({ autoScan = true }) => {
           if (autoScan) {
-            setTimeout(() => {
-              triggerAnalysis(videoEl, targetContainer, "youtube", getYouTubeVideoId());
-            }, 600);
+            setTimeout(() => runScan(false), 800);
           }
         });
-      });
+      }, { once: false });
 
-      // If video is already playing or buffered, analyze shortly
       if (!videoEl.paused && videoEl.currentTime > 0) {
-        setTimeout(() => {
-          triggerAnalysis(videoEl, targetContainer, "youtube", videoId);
-        }, 500);
+        setTimeout(() => runScan(false), 600);
       }
     }
   }
 
-  function hookTikTokFeed() {
-    const videoElements = document.querySelectorAll('div[data-e2e="feed-item"] video, video');
-    videoElements.forEach((videoEl) => {
-      if (hookedVideos.has(videoEl)) return;
-
-      const parentContainer = videoEl.parentElement || document.body;
-      hookedVideos.add(videoEl);
-
-      if (getComputedStyle(parentContainer).position === "static") {
-        parentContainer.style.position = "relative";
-      }
-
-      const itemId = getTikTokItemId(videoEl);
-      const badge = overlay.createBadge(parentContainer, () => {
-        triggerAnalysis(videoEl, parentContainer, "tiktok", itemId);
-      });
-
-      videoEl.addEventListener("play", () => {
-        chrome.storage.local.get("autoScan", ({ autoScan = true }) => {
-          if (autoScan) {
-            setTimeout(() => {
-              triggerAnalysis(videoEl, parentContainer, "tiktok", getTikTokItemId(videoEl));
-            }, 600);
-          }
-        });
-      });
-    });
-  }
-
-  function scanDOM() {
-    if (isYouTube) hookYouTubePlayer();
-    if (isTikTok) hookTikTokFeed();
-  }
-
-  // MutationObserver for Single Page Application navigation
-  const observer = new MutationObserver(() => {
-    scanDOM();
+  // Listen for manual scan trigger from popup extension button
+  chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+    if (message.action === "TRIGGER_ACTIVE_SCAN" || message.type === "TRIGGER_ACTIVE_SCAN") {
+      console.log("[Dispel Lens] Manual scan triggered via extension popup.");
+      runScan(true);
+      sendResponse({ status: "SCAN_STARTED" });
+      return true;
+    }
   });
 
-  observer.observe(document.documentElement, {
-    childList: true,
-    subtree: true
-  });
+  // Observe SPA navigation
+  const observer = new MutationObserver(() => scanDOM());
+  observer.observe(document.documentElement, { childList: true, subtree: true });
 
-  // SPA navigation events
   window.addEventListener("yt-navigate-finish", () => setTimeout(scanDOM, 400));
   window.addEventListener("popstate", () => setTimeout(scanDOM, 400));
   window.addEventListener("load", () => setTimeout(scanDOM, 400));
 
-  // Periodic safety check every 2 seconds in case SPA modifies video node
   setInterval(scanDOM, 2000);
-
-  // Initial scan
   scanDOM();
 })();

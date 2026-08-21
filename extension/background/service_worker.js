@@ -1,13 +1,13 @@
 /**
  * Dispel Lens — Background Service Worker.
  * Handles configuration storage, dispel.cloud session authentication handshake,
- * guest tier quota tracking, and background API proxying (bypasses Mixed Content on HTTPS pages).
+ * guest tier quota tracking, active tab scanning, and background API proxying.
  */
 
 const DEFAULT_SERVER_URL = "http://localhost:8000";
 const TUNNEL_SERVER_URL = "https://fantastic-event-utilize-let.trycloudflare.com";
 
-// Initialize default settings on installation
+// Initialize default settings and auto-inject content scripts into existing tabs on installation
 chrome.runtime.onInstalled.addListener(async () => {
   const existing = await chrome.storage.local.get([
     "serverUrl", "autoScan", "sensitivity", "scanHistory",
@@ -23,7 +23,25 @@ chrome.runtime.onInstalled.addListener(async () => {
     userTier: existing.userTier || "guest",
     guestScansUsed: existing.guestScansUsed || 0
   });
-  console.log("[Dispel Lens Service Worker] Initialized.");
+
+  // Inject content scripts into already open tabs so user doesn't need to refresh
+  const tabs = await chrome.tabs.query({ url: ["*://*.youtube.com/*", "*://*.tiktok.com/*", "http://localhost:8000/*"] });
+  for (const tab of tabs) {
+    try {
+      await chrome.scripting.insertCSS({
+        target: { tabId: tab.id },
+        files: ["content/overlay_ui.css"]
+      });
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ["content/frame_grabber.js", "content/overlay_ui.js", "content/dom_observer.js"]
+      });
+      console.log(`[Dispel Lens] Injected into open tab ${tab.id}`);
+    } catch (e) {
+      // Ignore tabs that can't be injected
+    }
+  }
+  console.log("[Dispel Lens Service Worker] Initialized and synced.");
 });
 
 // Helper to determine active working server URL (tries localhost, fallbacks to tunnel)
@@ -151,5 +169,5 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({ success: false, error: error.message });
     }
   })();
-  return true; // Keep message channel open
+  return true;
 });

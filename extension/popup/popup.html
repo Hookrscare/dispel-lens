@@ -29,12 +29,35 @@
     </div>
     <div class="status-indicator" id="backend-status-pill">
       <span class="status-dot" id="status-dot"></span>
-      <span class="status-text" id="status-label">Checking...</span>
+      <span class="status-text" id="status-label">Online</span>
+    </div>
+  </div>
+
+  <!-- Primary Instant Scan Action -->
+  <div style="padding: 12px 14px 0 14px;">
+    <button id="scan-now-btn" class="scan-primary-btn">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <circle cx="12" cy="12" r="10"></circle>
+        <polygon points="10 8 16 12 10 16 10 8"></polygon>
+      </svg>
+      <span>⚡ Analyze Active Video Now</span>
+    </button>
+    <div id="scan-status-msg" style="display: none; font-size: 11px; color: #00F0FF; text-align: center; margin-top: 6px;">Scanning active video burst...</div>
+  </div>
+
+  <!-- Active Scan Result Banner -->
+  <div id="active-scan-result" class="active-result-box" style="display: none;">
+    <div style="display: flex; justify-content: space-between; align-items: center;">
+      <div>
+        <div id="res-verdict-label" style="font-size: 14px; font-weight: 800; color: #10B981;">Verified Authentic</div>
+        <div id="res-verdict-sub" style="font-size: 11px; color: #94A3B8;">96% Natural Signal Coherence</div>
+      </div>
+      <div id="res-verdict-score" style="font-size: 20px; font-weight: 900; color: #10B981;">4% AI</div>
     </div>
   </div>
 
   <!-- Session & Quota Card -->
-  <div class="quota-card">
+  <div class="quota-card" style="margin-top: 12px;">
     <div class="quota-header">
       <span class="tier-tag" id="user-tier-tag">DISPEL GUEST</span>
       <span class="quota-count" id="quota-count-label">5 Free Daily Scans</span>
@@ -43,7 +66,7 @@
       <div class="quota-progress-fill" id="quota-progress-fill" style="width: 100%;"></div>
     </div>
     <div class="quota-footer">
-      <span id="session-sync-status">Guest Mode (Unlinked)</span>
+      <span id="session-sync-status">Guest Mode</span>
       <button class="upgrade-link-btn" id="tier-toggle-btn">Sign in to dispel.cloud →</button>
     </div>
   </div>
@@ -58,8 +81,8 @@
     <div class="control-row">
       <label for="sensitivity-select" class="control-label">Ensemble Strictness</label>
       <select id="sensitivity-select" class="select-input">
-        <option value="permissive">Permissive (Low Strictness)</option>
-        <option value="balanced" selected>Balanced (Standard)</option>
+        <option value="permissive">Permissive (Standard)</option>
+        <option value="balanced" selected>Balanced (Recommended)</option>
         <option value="strict">Strict (High Guard)</option>
       </select>
     </div>

@@ -4,15 +4,22 @@
   "version": "1.0.0",
   "description": "Real-time AI and deepfake detection for YouTube and TikTok by dispel.cloud",
   "permissions": [
-    "storage"
+    "storage",
+    "activeTab",
+    "scripting",
+    "tabs"
   ],
   "host_permissions": [
     "*://dispel.cloud/*",
     "*://*.dispel.cloud/*",
     "*://*.youtube.com/*",
     "*://*.tiktok.com/*",
+    "*://*.twitter.com/*",
+    "*://*.x.com/*",
+    "*://*.instagram.com/*",
     "http://localhost:8000/*",
-    "http://127.0.0.1:8000/*"
+    "http://127.0.0.1:8000/*",
+    "https://*.trycloudflare.com/*"
   ],
   "action": {
     "default_popup": "popup/popup.html",
@@ -31,7 +38,8 @@
       "matches": [
         "*://dispel.cloud/*",
         "*://*.dispel.cloud/*",
-        "http://localhost:8000/*"
+        "http://localhost:8000/*",
+        "https://*.trycloudflare.com/*"
       ],
       "js": [
         "auth-bridge.js"
@@ -41,7 +49,12 @@
     {
       "matches": [
         "*://*.youtube.com/*",
-        "*://*.tiktok.com/*"
+        "*://*.tiktok.com/*",
+        "*://*.twitter.com/*",
+        "*://*.x.com/*",
+        "*://*.instagram.com/*",
+        "http://localhost:8000/*",
+        "https://*.trycloudflare.com/*"
       ],
       "js": [
         "content/frame_grabber.js",
@@ -66,9 +79,7 @@
         "content/*"
       ],
       "matches": [
-        "*://*.youtube.com/*",
-        "*://*.tiktok.com/*",
-        "*://dispel.cloud/*"
+        "<all_urls>"
       ]
     }
   ]
