@@ -131,22 +131,22 @@ class PhysicsLightingDetector:
         avg_inconsistency = float(np.mean(inconsistencies))
         avg_symmetry = float(np.mean(symmetries)) if symmetries else 1.0
 
-        score = 0.15
+        score = 0.04
         artifacts = []
 
-        if avg_symmetry < 0.35:
-            score += 0.35
+        if avg_symmetry < 0.20 and avg_inconsistency > 2.0:
+            score += 0.50
             artifacts.append(f"asymmetric_specular_light_reflections (symmetry: {avg_symmetry:.2f})")
 
-        if avg_inconsistency > 1.7:
-            score += 0.30
-            artifacts.append(f"non_physical_ambient_light_conflict (inconsistency: {avg_inconsistency:.2f})")
-        elif avg_inconsistency > 1.3:
-            score += 0.15
+        if avg_inconsistency > 2.1:
+            score += 0.45
+            artifacts.append(f"conflicting_multidirectional_lighting (divergence: {avg_inconsistency:.2f})")
+        elif avg_inconsistency > 1.8:
+            score += 0.20
             artifacts.append("minor_lighting_gradient_divergence")
 
-        score = float(np.clip(score, 0.0, 1.0))
-        confidence = float(np.clip(abs(score - 0.5) * 2.0 + 0.2, 0.35, 0.90))
+        score = float(np.clip(score, 0.02, 0.99))
+        confidence = float(np.clip(abs(score - 0.5) * 2.0 + 0.35, 0.45, 0.95))
 
         return {
             "score": round(score, 4),

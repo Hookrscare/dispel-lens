@@ -140,30 +140,32 @@ class SpatialFFTDetector:
                         })
 
         # Synthetic anomaly score calculation
-        score = 0.12
+        score = 0.05
         artifacts_detected = []
 
-        if isolated_peaks > 15 and peak_prominence > 4.0:
-            score += 0.50
+        if isolated_peaks > 30 and peak_prominence > 6.0:
+            score += 0.75
             artifacts_detected.append(f"high_frequency_checkerboard_peaks ({isolated_peaks})")
-        elif isolated_peaks > 5:
-            score += 0.25
+        elif isolated_peaks > 15 and peak_prominence > 4.5:
+            score += 0.45
             artifacts_detected.append("periodic_upsampling_lattice_harmonics")
 
-        if slope > 0.05:  # Non-decaying or rising high frequency slope
-            score += 0.30
-            artifacts_detected.append("unnatural_inverted_spectral_slope")
-        elif slope > -0.2 and r_corr < 0.6:
-            score += 0.18
-            artifacts_detected.append("abnormal_radial_power_distribution")
+        # Check for inverted or flat spectral slope only when spectral energy exists
+        if np.std(fit_y) > 0.05:
+            if slope > 0.08:  # Non-decaying or rising high frequency slope
+                score += 0.40
+                artifacts_detected.append("unnatural_inverted_spectral_slope")
+            elif slope > -0.10 and r_corr < 0.4:
+                score += 0.20
+                artifacts_detected.append("abnormal_radial_power_distribution")
 
-        # Diffusion extreme high-frequency suppression check
-        if high_freq_ratio < 0.015 and low_energy / total_energy > 0.95:
-            score += 0.20
-            artifacts_detected.append("oversmoothed_synthetic_diffusion_suppression")
+        # Extreme checkerboard quadrant symmetry with prominent delta peaks
+        if quadrant_symmetry > 0.90 and isolated_peaks > 10:
+            score += 0.35
+            artifacts_detected.append("4_fold_upsampler_quadrant_symmetry")
 
-        score = float(np.clip(score, 0.0, 1.0))
-        confidence = float(np.clip(abs(score - 0.5) * 2.0 + 0.3, 0.4, 0.98))
+        score = float(np.clip(score, 0.02, 0.99))
+        confidence = float(np.clip(abs(score - 0.5) * 2.0 + 0.4, 0.5, 0.99))
 
         return {
             "score": round(score, 4),

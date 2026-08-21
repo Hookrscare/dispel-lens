@@ -114,19 +114,26 @@ class EnsembleEvaluator:
 
         ai_prob = float(np.clip(raw_ai_prob, 0.0, 1.0))
 
-        # Determine Verdict & Shield Badge
-        if ai_prob >= 0.65:
+        # Determine Verdict & Shield Badge (Decisive Calibration)
+        if ai_prob >= 0.55:
             verdict = "SYNTHETIC"
             badge = "RED"
-            status_label = "High Probability Synthetic (AI Generated)"
-        elif ai_prob <= 0.35:
+            status_label = f"AI Generated ({round(ai_prob * 100)}% Synthetic Probability)"
+        elif ai_prob <= 0.45:
             verdict = "AUTHENTIC"
             badge = "GREEN"
-            status_label = "Authenticity Verified (High Biological & Physical Coherence)"
+            auth_pct = round((1.0 - ai_prob) * 100)
+            status_label = f"Verified Authentic ({auth_pct}% Natural Signal Coherence)"
         else:
-            verdict = "INCONCLUSIVE"
-            badge = "AMBER"
-            status_label = "Inconclusive / Compression Artifacts Detected"
+            # Narrow boundary zone
+            if ai_prob >= 0.50:
+                verdict = "SYNTHETIC"
+                badge = "RED"
+                status_label = f"Likely Synthetic ({round(ai_prob * 100)}% Probability)"
+            else:
+                verdict = "AUTHENTIC"
+                badge = "GREEN"
+                status_label = f"Likely Authentic ({round((1.0 - ai_prob) * 100)}% Coherence)"
 
         # Calculate overall confidence
         weights_sum = max(0.01, (w_spatial + w_rppg + w_temporal + w_physics + w_audio))
@@ -138,7 +145,7 @@ class EnsembleEvaluator:
                 physics_res["confidence"] * w_physics +
                 audio_res["confidence"] * w_audio
             ) / weights_sum,
-            0.50,
+            0.65,
             0.99
         ))
 

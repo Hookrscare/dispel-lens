@@ -134,13 +134,13 @@ class RPPGBiologicalDetector:
 
         if face_box is None:
             return {
-                "score": 0.45,
-                "confidence": 0.35,
+                "score": 0.05,
+                "confidence": 0.50,
                 "face_detected": False,
                 "biological_signals_present": False,
                 "bpm_estimate": 0.0,
                 "snr_db": -5.0,
-                "details": "No clear human face detected in current viewport",
+                "details": "Non-facial scene (environmental / object footage)",
                 "heatmap_boxes": []
             }
 

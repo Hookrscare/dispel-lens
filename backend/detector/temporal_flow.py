@@ -124,25 +124,25 @@ class TemporalFlowDetector:
         # Compute synthetic score from temporal features
         # Natural videos: smooth continuous optical flow, low divergence at boundaries
         # AI generated videos: high edge shimmering (> 2.2), abrupt acceleration shifts, phase warping
-        score = 0.15
+        score = 0.04
         artifacts = []
 
-        if avg_shimmer > 2.5:
-            score += 0.40
+        if avg_shimmer > 2.8:
+            score += 0.55
             artifacts.append(f"severe_edge_shimmering ({avg_shimmer:.2f})")
-        elif avg_shimmer > 1.8:
-            score += 0.22
-            artifacts.append(f"moderate_boundary_pixel_jitter ({avg_shimmer:.2f})")
-
-        if avg_accel_var > 3.0:
+        elif avg_shimmer > 2.1:
             score += 0.30
+            artifacts.append(f"boundary_pixel_jitter ({avg_shimmer:.2f})")
+
+        if avg_accel_var > 3.5:
+            score += 0.40
             artifacts.append(f"erratic_motion_acceleration_variance ({avg_accel_var:.2f})")
-        elif avg_accel_var > 1.8:
-            score += 0.15
+        elif avg_accel_var > 2.4:
+            score += 0.20
             artifacts.append("temporal_phase_instability")
 
-        score = float(np.clip(score, 0.0, 1.0))
-        confidence = float(np.clip(abs(score - 0.5) * 2.0 + 0.3, 0.4, 0.95))
+        score = float(np.clip(score, 0.02, 0.99))
+        confidence = float(np.clip(abs(score - 0.5) * 2.0 + 0.35, 0.45, 0.96))
         motion_coherence = float(np.clip(1.0 - (avg_shimmer / 4.0), 0.0, 1.0))
 
         # Deduplicate and prioritize top heatmap boxes
