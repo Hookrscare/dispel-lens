@@ -62,6 +62,7 @@ def test_metering_service_quotas():
     
     # Free tier user: 15 scans limit
     user_free = "user_free_test_1"
+    meter.set_user_tier(user_free, "free")
     for i in range(15):
         auth = meter.check_and_consume_quota(user_free)
         assert auth["authorized"] is True

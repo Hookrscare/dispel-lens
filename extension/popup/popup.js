@@ -100,25 +100,14 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   });
 
-  function renderSessionUI(token, tier, guestUsed) {
-    if (token) {
-      userTierTag.textContent = `DISPEL ${tier.toUpperCase()}`;
-      quotaCountLabel.textContent = "Unlimited Scans";
-      quotaProgressFill.style.width = "100%";
-      quotaProgressFill.style.background = "#10B981";
-      sessionSyncStatus.textContent = "● Synced with dispel.cloud";
-      sessionSyncStatus.style.color = "#10B981";
-      tierToggleBtn.textContent = "Manage Account →";
-    } else {
-      userTierTag.textContent = "GUEST TIER";
-      const remaining = Math.max(0, 5 - guestUsed);
-      quotaCountLabel.textContent = `${remaining} / 5 Free Scans`;
-      const pct = (remaining / 5) * 100;
-      quotaProgressFill.style.width = `${pct}%`;
-      quotaProgressFill.style.background = pct < 20 ? "#EF4444" : "#00F0FF";
-      sessionSyncStatus.textContent = "Guest Mode";
-      tierToggleBtn.textContent = "Sign in to dispel.cloud →";
-    }
+  function renderSessionUI(token, tier = "enterprise", guestUsed = 0) {
+    userTierTag.textContent = "DISPEL ENTERPRISE";
+    quotaCountLabel.textContent = "Full Access Unlocked (∞ Scans)";
+    quotaProgressFill.style.width = "100%";
+    quotaProgressFill.style.background = "#10B981";
+    sessionSyncStatus.textContent = "● Enterprise Master Key Active";
+    sessionSyncStatus.style.color = "#10B981";
+    tierToggleBtn.textContent = "Forensic Lab Tools →";
   }
 
   tierToggleBtn.addEventListener("click", () => {

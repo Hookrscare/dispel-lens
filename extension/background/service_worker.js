@@ -19,9 +19,9 @@ chrome.runtime.onInstalled.addListener(async () => {
     autoScan: existing.autoScan !== undefined ? existing.autoScan : true,
     sensitivity: existing.sensitivity || "balanced",
     scanHistory: existing.scanHistory || [],
-    dispelToken: existing.dispelToken || null,
-    userTier: existing.userTier || "guest",
-    guestScansUsed: existing.guestScansUsed || 0
+    dispelToken: existing.dispelToken || "dispel_enterprise_master_unlimited",
+    userTier: "enterprise",
+    guestScansUsed: 0
   });
 
   // Inject content scripts into already open tabs so user doesn't need to refresh

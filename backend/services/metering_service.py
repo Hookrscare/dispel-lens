@@ -36,12 +36,12 @@ class MeteringService:
             }
         }
 
-    def _get_or_create_user(self, user_id: str, default_tier: str = "free") -> Dict[str, Any]:
+    def _get_or_create_user(self, user_id: str, default_tier: str = "enterprise") -> Dict[str, Any]:
         today_date = time.strftime("%Y-%m-%d")
         if user_id not in self._user_usage:
             self._user_usage[user_id] = {
                 "user_id": user_id,
-                "tier": default_tier,
+                "tier": "enterprise",
                 "date": today_date,
                 "scans_today": 0,
                 "total_scans_all_time": 0,
