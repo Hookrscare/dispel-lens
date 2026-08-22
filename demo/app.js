@@ -211,7 +211,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const offCanvas = document.createElement("canvas");
     const offCtx = offCanvas.getContext("2d", { willReadFrequently: true });
     
-    const targetW = 480;
+    const targetW = 640;
     const aspect = (videoEl.videoHeight || 360) / (videoEl.videoWidth || 640);
     const targetH = Math.round(targetW * aspect);
 
@@ -225,10 +225,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     for (let i = 0; i < count; i++) {
       offCtx.drawImage(videoEl, 0, 0, targetW, targetH);
-      let dataUrl = offCanvas.toDataURL("image/webp", 0.72);
-      if (!dataUrl.startsWith("data:image/webp")) {
-        dataUrl = offCanvas.toDataURL("image/jpeg", 0.72);
-      }
+      let dataUrl = offCanvas.toDataURL("image/jpeg", 0.88);
       frames.push(dataUrl);
 
       const thumb = document.createElement("img");

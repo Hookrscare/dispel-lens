@@ -9,7 +9,7 @@ class VideoFrameGrabber {
   constructor(options = {}) {
     this.targetFps = options.fps || 10;
     this.burstFrameCount = options.frameCount || 6;
-    this.targetWidth = options.targetWidth || 480;
+    this.targetWidth = options.targetWidth || 640;
     this.isCapturing = false;
     this.canvas = document.createElement("canvas");
     this.ctx = this.canvas.getContext("2d", { willReadFrequently: true });
@@ -70,10 +70,7 @@ class VideoFrameGrabber {
       for (let i = 0; i < this.burstFrameCount; i++) {
         try {
           this.ctx.drawImage(videoElement, 0, 0, targetW, targetH);
-          let dataUrl = this.canvas.toDataURL("image/webp", 0.72);
-          if (!dataUrl.startsWith("data:image/webp")) {
-            dataUrl = this.canvas.toDataURL("image/jpeg", 0.72);
-          }
+          let dataUrl = this.canvas.toDataURL("image/jpeg", 0.88);
           frameBurst.push(dataUrl);
         } catch (drawErr) {
           console.warn("[Dispel FrameGrabber] Frame extraction error:", drawErr);
