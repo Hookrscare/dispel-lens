@@ -30,6 +30,15 @@
       "128": "icons/icon-128.png"
     }
   },
+  "commands": {
+    "scan_video": {
+      "suggested_key": {
+        "default": "Alt+Shift+D",
+        "mac": "Command+Shift+D"
+      },
+      "description": "Trigger Dispel Reality Lens Scan"
+    }
+  },
   "background": {
     "service_worker": "background/service_worker.js"
   },

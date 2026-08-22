@@ -44,6 +44,22 @@ chrome.runtime.onInstalled.addListener(async () => {
   console.log("[Dispel Lens Service Worker] Initialized and synced.");
 });
 
+// Keyboard Shortcut Command Listener (Cmd+Shift+D / Alt+Shift+D)
+chrome.commands.onCommand.addListener(async (command) => {
+  if (command === "scan_video") {
+    const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+    if (tab) {
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          files: ["content/frame_grabber.js", "content/overlay_ui.js", "content/dom_observer.js"]
+        });
+      } catch (e) {}
+      chrome.tabs.sendMessage(tab.id, { action: "TRIGGER_ACTIVE_SCAN" });
+    }
+  }
+});
+
 // Helper to determine active working server URL (tries localhost, fallbacks to tunnel)
 async function getActiveServerUrl() {
   const { serverUrl = DEFAULT_SERVER_URL } = await chrome.storage.local.get("serverUrl");
