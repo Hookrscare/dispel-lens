@@ -3,128 +3,144 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dispel Lens — Forensic Reality Intelligence</title>
+  <title>Dispel Lens — 3D Holographic Reality Optics</title>
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <div class="app-container">
-    <!-- Header -->
-    <header class="app-header">
-      <div class="brand-cluster">
-        <div class="aperture-emblem">
-          <svg viewBox="0 0 100 100" width="22" height="22" fill="none">
-            <circle cx="50" cy="50" r="44" stroke="rgba(0,229,255,0.25)" stroke-width="2" stroke-dasharray="6 4"/>
-            <polygon points="50,22 76,68 24,68" fill="none" stroke="#00E5FF" stroke-width="3"/>
-            <circle cx="50" cy="52" r="5" fill="#00E599"/>
-          </svg>
+  <!-- Ambient Liquid Glass Background Glows -->
+  <div class="ambient-glow glow-1"></div>
+  <div class="ambient-glow glow-2"></div>
+
+  <div class="glass-viewport" id="glass-card">
+    <div class="glass-glare" id="glass-glare"></div>
+
+    <!-- 3D Header with Animated Holographic Prism -->
+    <header class="glass-header">
+      <div class="brand-group">
+        <div class="prism-3d-scene">
+          <div class="prism-3d-cube" id="prism-cube">
+            <div class="cube-face face-front"></div>
+            <div class="cube-face face-back"></div>
+            <div class="cube-face face-right"></div>
+            <div class="cube-face face-left"></div>
+            <div class="cube-face face-top"></div>
+            <div class="cube-face face-bottom"></div>
+            <div class="cube-core"></div>
+          </div>
         </div>
         <div>
-          <div class="brand-title">DISPEL <span class="brand-accent">LENS</span></div>
-          <div class="brand-telemetry">FORENSIC OPTICS // v1.1.0</div>
+          <div class="brand-title">DISPEL <span class="accent-text">LENS</span></div>
+          <div class="brand-sub">QUANTUM OPTICS // v1.2</div>
         </div>
       </div>
-      <div class="system-status-pill" id="backend-status-pill">
-        <span class="status-pulse-dot" id="status-dot"></span>
-        <span class="status-code" id="status-label">SYS_ACTIVE</span>
+
+      <div class="status-crystal" id="backend-status-pill">
+        <span class="crystal-dot" id="status-dot"></span>
+        <span class="crystal-text" id="status-label">ONLINE</span>
       </div>
     </header>
 
-    <!-- Master Action Area -->
-    <section class="scan-deck">
-      <button id="scan-now-btn" class="tactile-scan-btn">
-        <div class="btn-laser-sweep"></div>
-        <div class="btn-content">
-          <svg class="scan-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-            <circle cx="12" cy="12" r="9"/>
-            <path d="M12 3v4M12 17v4M3 12h4M17 12h4"/>
-            <circle cx="12" cy="12" r="2" fill="currentColor"/>
+    <!-- Master Scan Deck with 3D Hologram Button -->
+    <section class="action-deck">
+      <button id="scan-now-btn" class="glass-scan-btn">
+        <div class="scan-laser-glow"></div>
+        <div class="btn-inner-content">
+          <svg class="radar-scan-svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10" stroke-dasharray="4 2"/>
+            <path d="M12 2a10 10 0 0 1 10 10" stroke="#00F0FF" stroke-width="2.5"/>
+            <circle cx="12" cy="12" r="3" fill="#00E599"/>
           </svg>
-          <span class="btn-text">ANALYZE ACTIVE STREAM</span>
+          <span class="btn-title">ANALYZE ACTIVE STREAM</span>
         </div>
       </button>
-      <div id="scan-status-msg" class="scan-telemetry-status">EXTRACTING RAW SENSOR BURST...</div>
+      <div id="scan-status-msg" class="telemetry-bar">EXTRACTING RAW SENSOR BURST...</div>
     </section>
 
-    <!-- Live Telemetry Verdict Card -->
-    <section id="active-scan-result" class="verdict-matrix" style="display: none;">
-      <div class="verdict-matrix-header">
+    <!-- Live 3D Holographic Telemetry Card -->
+    <section id="active-scan-result" class="glass-telemetry-panel" style="display: none;">
+      <div class="telemetry-header">
         <div>
-          <span class="verdict-badge-chip" id="res-badge-chip">VERIFIED</span>
-          <div class="verdict-headline" id="res-verdict-label">AUTHENTIC OPTICAL MEDIA</div>
-          <div class="verdict-subtext" id="res-verdict-sub">Hardware Sensor PRNU & Natural Motion Coherent</div>
+          <div class="chip-status" id="res-badge-chip">● VERIFIED OPTICAL</div>
+          <div class="headline-verdict" id="res-verdict-label">AUTHENTIC CAMERA MEDIA</div>
+          <div class="caption-verdict" id="res-verdict-sub">Hardware Sensor PRNU & Optical Fluidity Coherent</div>
         </div>
-        <div class="verdict-score-display">
-          <div class="score-num" id="res-verdict-score">4%</div>
-          <div class="score-unit">SYNTHETIC</div>
+        <div class="score-crystal">
+          <div class="score-display-num" id="res-verdict-score">4%</div>
+          <div class="score-display-tag">SYNTHETIC</div>
         </div>
       </div>
 
-      <!-- Segmented Vector Micro-Bars -->
-      <div class="forensic-radar-bars">
-        <div class="radar-bar-row">
-          <span class="radar-label">OPTICS & SENSOR GRAIN</span>
-          <div class="segmented-track"><div class="segmented-fill" id="bar-sensor" style="width: 96%;"></div></div>
-          <span class="radar-val" id="val-sensor">96%</span>
+      <!-- Real-time Holographic Radar Oscilloscope Canvas -->
+      <div class="waveform-container">
+        <canvas id="live-waveform-canvas" width="300" height="42"></canvas>
+      </div>
+
+      <!-- 3D Vector Meters -->
+      <div class="vector-meters">
+        <div class="meter-row">
+          <span class="meter-label">CMOS SENSOR GRAIN</span>
+          <div class="glass-track"><div class="glass-fill" id="bar-sensor" style="width: 96%;"></div></div>
+          <span class="meter-num" id="val-sensor">96%</span>
         </div>
-        <div class="radar-bar-row">
-          <span class="radar-label">TEMPORAL WARP STABILITY</span>
-          <div class="segmented-track"><div class="segmented-fill" id="bar-motion" style="width: 94%;"></div></div>
-          <span class="radar-val" id="val-motion">94%</span>
+        <div class="meter-row">
+          <span class="meter-label">OPTICAL MOTION WARP</span>
+          <div class="glass-track"><div class="glass-fill" id="bar-motion" style="width: 94%;"></div></div>
+          <span class="meter-num" id="val-motion">94%</span>
         </div>
-        <div class="radar-bar-row">
-          <span class="radar-label">BIOLOGICAL HEMODYNAMICS</span>
-          <div class="segmented-track"><div class="segmented-fill" id="bar-bio" style="width: 98%;"></div></div>
-          <span class="radar-val" id="val-bio">98%</span>
+        <div class="meter-row">
+          <span class="meter-label">BIOMETRIC ECG PULSE</span>
+          <div class="glass-track"><div class="glass-fill" id="bar-bio" style="width: 98%;"></div></div>
+          <span class="meter-num" id="val-bio">98%</span>
         </div>
       </div>
     </section>
 
-    <!-- License & Clearance Strip -->
-    <section class="clearance-strip">
-      <div class="clearance-meta">
-        <span class="clearance-tag">ENTERPRISE MASTER</span>
-        <span class="clearance-quota">UNLIMITED VERIFICATIONS (∞)</span>
+    <!-- Enterprise Status Pill -->
+    <section class="enterprise-crystal-strip">
+      <div class="strip-header">
+        <span class="strip-badge">ENTERPRISE CLEARANCE</span>
+        <span class="strip-quota">UNLIMITED SCANS (∞)</span>
       </div>
-      <div class="clearance-indicator-bar">
-        <div class="clearance-progress-fill"></div>
+      <div class="crystal-progress-track">
+        <div class="crystal-progress-fill"></div>
       </div>
     </section>
 
-    <!-- Settings Controls -->
-    <section class="controls-panel">
-      <div class="panel-row">
-        <span class="panel-label">AMBIENT AUTO-PROBE</span>
-        <label class="switch">
+    <!-- Precision Controls -->
+    <section class="glass-controls">
+      <div class="control-item">
+        <span class="control-name">AMBIENT AUTO-SCAN</span>
+        <label class="glass-switch">
           <input type="checkbox" id="auto-scan-toggle" checked>
-          <span class="slider"></span>
+          <span class="glass-slider"></span>
         </label>
       </div>
 
-      <div class="panel-row">
-        <span class="panel-label">DETECTION PROFILE</span>
-        <select id="sensitivity-select" class="precision-select">
-          <option value="permissive">PERMISSIVE (LOW-BITRATE)</option>
+      <div class="control-item">
+        <span class="control-name">DETECTION SENSITIVITY</span>
+        <select id="sensitivity-select" class="glass-select">
+          <option value="permissive">PERMISSIVE (STREAMING)</option>
           <option value="balanced" selected>BALANCED (PRODUCTION)</option>
           <option value="strict">STRICT (FORENSIC / KYC)</option>
         </select>
       </div>
     </section>
 
-    <!-- History Log -->
-    <section class="feed-log-panel">
-      <div class="panel-header">
-        <span class="panel-title">AUDIT TRAIL</span>
-        <button id="clear-history-btn" class="micro-text-btn">PURGE LOG</button>
+    <!-- Reality Audit History -->
+    <section class="audit-deck">
+      <div class="audit-header">
+        <span class="audit-title">REALITY AUDIT TRAIL</span>
+        <button id="clear-history-btn" class="glass-mini-btn">CLEAR</button>
       </div>
-      <div id="history-list" class="log-scrollbox">
-        <div class="log-empty">NO VERIFICATIONS RECORDED IN ACTIVE SESSION</div>
+      <div id="history-list" class="audit-scrollbox">
+        <div class="audit-empty">NO VERIFICATIONS IN ACTIVE SESSION</div>
       </div>
     </section>
 
-    <!-- Footer -->
-    <footer class="app-footer">
-      <a href="http://localhost:8000/demo/" target="_blank" class="registry-link">
-        <span>OPEN TRUST REGISTRY (dispel.cloud)</span>
+    <!-- Glass Footer -->
+    <footer class="glass-footer">
+      <a href="http://localhost:8000/demo/" target="_blank" class="glass-link">
+        <span>GLOBAL TRUST REGISTRY (dispel.cloud)</span>
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/>
         </svg>
