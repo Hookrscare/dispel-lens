@@ -56,6 +56,7 @@ class FrameBurstRequest(BaseModel):
     requested_tier: Optional[str] = Field("deep", description="Execution tier: fast or deep")
     sensitivity: Optional[str] = Field("balanced", description="Sensitivity profile: permissive, balanced, or strict")
     title: Optional[str] = Field(None, description="Optional title of the video stream")
+    force_refresh: Optional[bool] = Field(False, description="Bypass cache and force fresh inference")
 
 
 class CertificateRequest(BaseModel):
@@ -142,7 +143,7 @@ async def analyze_video_frames(payload: FrameBurstRequest):
     user_id = payload.user_id or "anonymous_user"
 
     # Step 1: Tier 1 Zero-Cost Global Cache Lookup
-    if payload.video_id:
+    if not payload.force_refresh and payload.video_id and len(payload.video_id) >= 6 and payload.video_id not in ["active_web_video", "social_video", "/", "undefined"] and not payload.video_id.startswith("asset_"):
         hit, cached_data, match_type = cache_service.lookup(platform=payload.platform, video_id=payload.video_id)
         if hit:
             return cached_data

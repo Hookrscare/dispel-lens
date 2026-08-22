@@ -25,7 +25,7 @@ class VideoFrameGrabber {
   /**
    * Capture a burst of sequential frames directly from the HTML5 video element.
    */
-  async captureBurst(videoElement, videoId = null, platform = "web") {
+  async captureBurst(videoElement, videoId = null, platform = "web", forceRefresh = false) {
     if (!videoElement) {
       console.warn("[Dispel FrameGrabber] No video element found.");
       return;
@@ -92,7 +92,8 @@ class VideoFrameGrabber {
         platform: platform,
         title: document.title || "Social Video Stream",
         timestamp: videoElement.currentTime || 0.0,
-        frames: frameBurst
+        frames: frameBurst,
+        force_refresh: forceRefresh
       };
 
       // Fast-tier initial feedback simulation

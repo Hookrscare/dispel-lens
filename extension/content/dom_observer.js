@@ -69,7 +69,7 @@
            videoEl.parentElement;
   }
 
-  function runScan(openModalWhenDone = false) {
+  function runScan(openModalWhenDone = false, forceRefresh = false) {
     if (!isWatchPage()) return;
 
     const videoEl = findActiveVideoElement();
@@ -110,11 +110,11 @@
       });
 
       if (openModalWhenDone) {
-        overlay.openModal(deepData, () => runScan(true));
+        overlay.openModal(deepData, () => runScan(true, true));
       }
     };
 
-    grabber.captureBurst(videoEl, videoId, platform);
+    grabber.captureBurst(videoEl, videoId, platform, forceRefresh);
   }
 
   function ensureBadgeInjected(videoEl) {
@@ -122,7 +122,7 @@
     if (!playerContainer) return null;
 
     activeBadge = overlay.createBadge(playerContainer, () => {
-      runScan(true);
+      runScan(true, true);
     });
 
     overlay.ensureDockInjected(playerContainer);

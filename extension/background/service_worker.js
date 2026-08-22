@@ -101,7 +101,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               timestamp_sec: message.payload.timestamp || 0.0,
               frames: message.payload.frames,
               audio_sample_base64: message.payload.audioSample || null,
-              sensitivity: message.payload.sensitivity || sensitivity || "balanced"
+              sensitivity: message.payload.sensitivity || sensitivity || "balanced",
+              force_refresh: message.payload.force_refresh || false
             })
           });
 

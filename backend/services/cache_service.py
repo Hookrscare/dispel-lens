@@ -103,15 +103,17 @@ class GlobalCacheService:
         """
         key = f"{platform}:{video_id}" if video_id else f"{platform}:{hashlib.sha256(str(time.time()).encode()).hexdigest()[:12]}"
         
-        # Save clean copy
-        stored_copy = dict(result_data)
-        stored_copy["cached_at"] = time.time()
-        self._memory_cache[key] = stored_copy
+        # Only cache real platform video IDs (ignore generic fallbacks)
+        data = dict(result_data)
+        if video_id and len(video_id) >= 6 and video_id not in ["active_web_video", "social_video", "/", "undefined"] and not video_id.startswith("asset_"):
+            cache_key = f"{platform}:{video_id}"
+            data["cached"] = True
+            data["cache_source"] = "global_trust_registry"
+            self._memory_cache[cache_key] = data
 
-        # Index pHash
         if sample_frame_bgr is not None:
             phash = self._compute_phash(sample_frame_bgr)
-            self._phash_index[phash] = key
+            self._phash_index[phash] = cache_key if video_id else f"{platform}:{hash(str(data))}"
 
         self._save_to_disk()
         return key
