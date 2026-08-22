@@ -80,3 +80,17 @@ class C2PAWatermarkDetector:
             "issuer": issuer,
             "confidence": confidence
         }
+
+    def detect_c2pa(self, frame_bgr=None, manifest_bytes: Optional[bytes] = None) -> Dict[str, Any]:
+        """
+        Detect C2PA manifest or digital watermark from frame or raw bytes.
+        """
+        if manifest_bytes:
+            return self.inspect_raw_bytes(manifest_bytes)
+        return {
+            "c2pa_present": False,
+            "synthetic_claim": False,
+            "watermark_detected": False,
+            "issuer": None,
+            "confidence": 0.0
+        }

@@ -181,3 +181,6 @@ class AudioSyncDetector:
             "lip_sync_lag_ms": lag_ms,
             "anomalies": anomalies
         }
+
+    def analyze_audio_sample(self, audio_data_or_b64: Optional[str]) -> Dict[str, Any]:
+        return self.analyze_audio_track(audio_data_or_b64)

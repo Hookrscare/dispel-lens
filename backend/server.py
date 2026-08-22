@@ -54,6 +54,7 @@ class FrameBurstRequest(BaseModel):
     audio_sample_base64: Optional[str] = Field(None, description="Optional base64 encoded audio track snippet")
     user_id: Optional[str] = Field("anonymous_user", description="User ID or API key for quota tracking")
     requested_tier: Optional[str] = Field("deep", description="Execution tier: fast or deep")
+    sensitivity: Optional[str] = Field("balanced", description="Sensitivity profile: permissive, balanced, or strict")
 
 
 class CertificateRequest(BaseModel):
@@ -170,11 +171,10 @@ async def analyze_video_frames(payload: FrameBurstRequest):
         raise HTTPException(status_code=400, detail="Failed to decode valid image frames")
 
     # Step 3: Run Multi-Layer Deep Pipeline
-    raw_payload_bytes = payload.frames[0].encode("utf-8") if payload.frames else None
     result = evaluator.evaluate_deep_tier(
         decoded_frames,
-        raw_payload_bytes=raw_payload_bytes,
-        audio_data_or_b64=payload.audio_sample_base64
+        audio_sample_base64=payload.audio_sample_base64,
+        sensitivity=payload.sensitivity or "balanced"
     )
 
     result["video_id"] = payload.video_id
@@ -252,7 +252,7 @@ async def websocket_detection_endpoint(websocket: WebSocket):
                 # 2. Deep Tier Comprehensive Result
                 deep_res = evaluator.evaluate_deep_tier(
                     decoded_frames,
-                    audio_data_or_b64=audio_b64
+                    audio_sample_base64=audio_b64
                 )
                 deep_res["videoId"] = video_id
                 deep_res["platform"] = platform

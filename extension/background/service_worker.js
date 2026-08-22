@@ -67,7 +67,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       // 1. Frame Burst Inference Proxy (bypasses browser mixed content on YouTube / TikTok)
       if (message.type === "ANALYZE_BURST" || message.action === "ANALYZE_BURST") {
         const activeUrl = await getActiveServerUrl();
-        const { dispelToken = null } = await chrome.storage.local.get("dispelToken");
+        const { dispelToken = null, sensitivity = "balanced" } = await chrome.storage.local.get(["dispelToken", "sensitivity"]);
 
         const headers = { "Content-Type": "application/json" };
         if (dispelToken) {
@@ -83,7 +83,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               platform: message.payload.platform || "web",
               timestamp_sec: message.payload.timestamp || 0.0,
               frames: message.payload.frames,
-              audio_sample_base64: message.payload.audioSample || null
+              audio_sample_base64: message.payload.audioSample || null,
+              sensitivity: message.payload.sensitivity || sensitivity || "balanced"
             })
           });
 

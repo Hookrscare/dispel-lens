@@ -1,17 +1,16 @@
 """
-Multimodal Ensemble Evaluator & 'Proof of Reality' Engine.
-Combines Spatial FFT, Biological rPPG, Optical Flow Temporal Coherence,
-Physics/Lighting symmetry, Cross-Modal Audio/Voice cloning, and C2PA provenance.
-Supports Two-Tier Latency Routing (Fast Tier <50ms vs Deep Tier comprehensive).
+Multimodal Ensemble Evaluator & Calibrated Fusion Engine.
+Aggregates spatial frequency, sensor noise residuals (PRNU), optical flow motion-compensated warping,
+biological rPPG hemodynamics, physical lighting coherence, and audio vocoder spectra.
+Supports user sensitivity profiles (Permissive, Balanced, Strict).
 """
 
 from typing import List, Dict, Any, Optional
 import numpy as np
-import time
 
 from .spatial_fft import SpatialFFTDetector
-from .rppg_biological import RPPGBiologicalDetector
 from .temporal_flow import TemporalFlowDetector
+from .rppg_biological import RPPGBiologicalDetector
 from .physics_lighting import PhysicsLightingDetector
 from .c2pa_watermark import C2PAWatermarkDetector
 from .audio_sync import AudioSyncDetector
@@ -19,76 +18,84 @@ from .audio_sync import AudioSyncDetector
 
 class EnsembleEvaluator:
     def __init__(self, fps: float = 10.0):
+        self.fps = fps
         self.spatial_detector = SpatialFFTDetector()
-        self.rppg_detector = RPPGBiologicalDetector(fps=fps)
         self.temporal_detector = TemporalFlowDetector()
+        self.rppg_detector = RPPGBiologicalDetector(fps=fps)
         self.physics_detector = PhysicsLightingDetector()
         self.c2pa_detector = C2PAWatermarkDetector()
         self.audio_detector = AudioSyncDetector()
 
-    def evaluate_fast_tier(self, frame_bgr: np.ndarray) -> Dict[str, Any]:
+    def evaluate_fast_tier(self, frame_bgr: np.ndarray, sensitivity: str = "balanced") -> Dict[str, Any]:
         """
-        Fast Tier evaluation (<50ms) for immediate client badge rendering.
-        Runs rapid spatial FFT check on primary frame.
+        Fast tier analysis on a single frame (< 50ms latency).
         """
-        t0 = time.perf_counter()
         spatial_res = self.spatial_detector.analyze_frame(frame_bgr)
-        elapsed_ms = round((time.perf_counter() - t0) * 1000, 2)
+        c2pa_res = self.c2pa_detector.detect_c2pa(frame_bgr)
 
-        score = spatial_res["score"]
-        if score >= 0.65:
+        # Baseline fast-tier probability
+        raw_prob = spatial_res["score"]
+
+        if c2pa_res.get("synthetic_claim"):
+            raw_prob = max(raw_prob, 0.95)
+        elif c2pa_res.get("watermark_detected"):
+            raw_prob = max(raw_prob, 0.90)
+
+        ai_prob = float(np.clip(raw_prob, 0.02, 0.99))
+
+        synth_thresh = 0.65 if sensitivity == "permissive" else 0.45 if sensitivity == "strict" else 0.55
+        auth_thresh = 0.50 if sensitivity == "permissive" else 0.35 if sensitivity == "strict" else 0.45
+
+        if ai_prob >= synth_thresh:
             verdict = "SYNTHETIC"
             badge = "RED"
-        elif score <= 0.30:
+            status_label = f"AI Video Detected ({round(ai_prob * 100)}% AI)"
+        elif ai_prob <= auth_thresh:
             verdict = "AUTHENTIC"
             badge = "GREEN"
+            auth_pct = round((1.0 - ai_prob) * 100)
+            status_label = f"Verified Authentic ({auth_pct}% Natural)"
         else:
-            verdict = "INCONCLUSIVE"
-            badge = "AMBER"
+            verdict = "SYNTHETIC" if ai_prob >= 0.50 else "AUTHENTIC"
+            badge = "RED" if ai_prob >= 0.50 else "GREEN"
+            status_label = f"Analysis Signal ({round(ai_prob * 100)}% AI)"
 
         return {
             "tier": "fast",
-            "latency_ms": elapsed_ms,
-            "ai_probability": round(score, 4),
-            "confidence": spatial_res["confidence"],
             "verdict": verdict,
             "badge_color": badge,
-            "quick_artifacts": spatial_res.get("artifacts_detected", [])
+            "status_label": status_label,
+            "ai_probability": round(ai_prob, 4),
+            "confidence": spatial_res["confidence"],
+            "artifacts_detected": spatial_res.get("artifacts_detected", []),
+            "heatmap_boxes": spatial_res.get("heatmap_boxes", [])
         }
 
     def evaluate_deep_tier(
         self,
         frames_bgr: List[np.ndarray],
-        raw_payload_bytes: Optional[bytes] = None,
-        audio_data_or_b64: Optional[str] = None
+        audio_sample_base64: Optional[str] = None,
+        c2pa_manifest_bytes: Optional[bytes] = None,
+        sensitivity: str = "balanced"
     ) -> Dict[str, Any]:
         """
-        Deep Tier evaluation (comprehensive multi-layer spatial-temporal-audio pipeline).
+        Deep tier multimodal analysis across spatial, temporal, biological, physical, and acoustic dimensions.
         """
-        t0 = time.perf_counter()
+        if not frames_bgr:
+            return {"verdict": "AUTHENTIC", "ai_probability": 0.04, "badge_color": "GREEN"}
 
-        # 1. Spatial Frequency / FFT Analysis
+        # 1. Run all forensic vector pipelines
         spatial_res = self.spatial_detector.analyze_burst(frames_bgr)
-        
-        # 2. Biological Signal / rPPG Analysis
-        rppg_res = self.rppg_detector.analyze_burst(frames_bgr)
-
-        # 3. Optical Flow & Temporal Coherence Analysis
         temporal_res = self.temporal_detector.analyze_burst(frames_bgr)
-
-        # 4. Physics & Lighting Consistency Analysis
+        rppg_res = self.rppg_detector.analyze_burst(frames_bgr)
         physics_res = self.physics_detector.analyze_burst(frames_bgr)
+        c2pa_res = self.c2pa_detector.detect_c2pa(frames_bgr[0], c2pa_manifest_bytes)
+        audio_res = self.audio_detector.analyze_audio_sample(audio_sample_base64)
 
-        # 5. C2PA & Provenance Metadata Check
-        c2pa_res = self.c2pa_detector.inspect_raw_bytes(raw_payload_bytes or b"")
-
-        # 6. Cross-Modal Audio & Voice Clone Analysis
-        audio_res = self.audio_detector.analyze_audio_track(audio_data_or_b64, frames_bgr)
-
-        # Dynamic weight assignment
         face_present = rppg_res.get("face_detected", False)
         audio_present = audio_res.get("audio_present", False)
 
+        # 2. Dynamic multi-modal weighting
         if face_present and audio_present:
             w_spatial, w_rppg, w_temporal, w_physics, w_audio = 0.20, 0.25, 0.20, 0.15, 0.20
         elif face_present:
@@ -117,8 +124,7 @@ class EnsembleEvaluator:
         ]
         max_vector_score = max(active_vector_scores)
 
-        # Non-linear forensic boost: if any vector independently detects a definitive anomaly (>= 0.60),
-        # it decisively elevates the final ensemble probability
+        # Non-linear forensic boost: if any vector independently detects a definitive anomaly
         if max_vector_score >= 0.70:
             raw_ai_prob = max_vector_score
         elif max_vector_score >= 0.55:
@@ -134,112 +140,70 @@ class EnsembleEvaluator:
 
         ai_prob = float(np.clip(raw_ai_prob, 0.02, 0.99))
 
-        # Determine Verdict & Shield Badge (Decisive Calibration)
-        if ai_prob >= 0.55:
+        # Apply Sensitivity Profiles
+        synth_thresh = 0.65 if sensitivity == "permissive" else 0.45 if sensitivity == "strict" else 0.55
+        auth_thresh = 0.50 if sensitivity == "permissive" else 0.35 if sensitivity == "strict" else 0.45
+
+        if ai_prob >= synth_thresh:
             verdict = "SYNTHETIC"
             badge = "RED"
             status_label = f"AI Generated ({round(ai_prob * 100)}% Synthetic Probability)"
-        elif ai_prob <= 0.45:
+        elif ai_prob <= auth_thresh:
             verdict = "AUTHENTIC"
             badge = "GREEN"
             auth_pct = round((1.0 - ai_prob) * 100)
             status_label = f"Verified Authentic ({auth_pct}% Natural Signal Coherence)"
         else:
-            # Narrow boundary zone
-            if ai_prob >= 0.50:
-                verdict = "SYNTHETIC"
-                badge = "RED"
-                status_label = f"Likely Synthetic ({round(ai_prob * 100)}% Probability)"
-            else:
-                verdict = "AUTHENTIC"
-                badge = "GREEN"
-                status_label = f"Likely Authentic ({round((1.0 - ai_prob) * 100)}% Coherence)"
+            verdict = "SYNTHETIC" if ai_prob >= 0.50 else "AUTHENTIC"
+            badge = "RED" if ai_prob >= 0.50 else "GREEN"
+            status_label = f"Dispel Scan ({round(ai_prob * 100)}% AI Probability)"
 
-        # Calculate overall confidence
-        weights_sum = max(0.01, (w_spatial + w_rppg + w_temporal + w_physics + w_audio))
-        confidence = float(np.clip(
-            (
-                spatial_res["confidence"] * w_spatial +
-                rppg_res["confidence"] * w_rppg +
-                temporal_res["confidence"] * w_temporal +
-                physics_res["confidence"] * w_physics +
-                audio_res["confidence"] * w_audio
-            ) / weights_sum,
-            0.65,
-            0.99
-        ))
-
-        # Collect explainable forensic heatmap bounding boxes
-        heatmap_boxes = []
-        heatmap_boxes.extend(spatial_res.get("heatmap_boxes", []))
-        heatmap_boxes.extend(rppg_res.get("heatmap_boxes", []))
-        heatmap_boxes.extend(temporal_res.get("heatmap_boxes", []))
-        heatmap_boxes.extend(physics_res.get("heatmap_boxes", []))
-
-        heatmap_boxes = sorted(heatmap_boxes, key=lambda b: b.get("intensity", 0.0), reverse=True)[:12]
-
-        # Aggregate plain-English explainability failure points
+        # Aggregate Failure Points
         failure_points = []
-        if spatial_res.get("artifacts_detected"):
-            failure_points.extend([f"Spatial: {a}" for a in spatial_res["artifacts_detected"]])
-        if rppg_res.get("details") and rppg_res["score"] > 0.60:
-            failure_points.append(f"Biological: {rppg_res['details']}")
-        if temporal_res.get("artifacts_detected"):
-            failure_points.extend([f"Temporal: {a}" for a in temporal_res["artifacts_detected"]])
-        if physics_res.get("artifacts_detected"):
-            failure_points.extend([f"Physics: {a}" for a in physics_res["artifacts_detected"]])
-        if audio_res.get("anomalies"):
-            failure_points.extend([f"Audio: {a}" for a in audio_res["anomalies"]])
-        if c2pa_res.get("synthetic_claims_detail"):
-            failure_points.append(f"Provenance: C2PA synthetic content tag ({', '.join(c2pa_res['synthetic_claims_detail'])})")
+        for a in spatial_res.get("artifacts_detected", []):
+            failure_points.append(f"Spatial: {a}")
+        for a in temporal_res.get("artifacts_detected", []):
+            failure_points.append(f"Temporal: {a}")
+        if face_present and not rppg_res.get("biological_signals_present", True) and rppg_res.get("score", 0) > 0.6:
+            failure_points.append(f"Biological: Absent facial hemodynamics ({rppg_res.get('snr_db', 0)} dB)")
+        if audio_present and audio_res.get("score", 0) > 0.6:
+            for art in audio_res.get("artifacts_detected", []):
+                failure_points.append(f"Audio: {art}")
 
-        elapsed_ms = round((time.perf_counter() - t0) * 1000, 2)
+        # Combine heatmaps
+        combined_boxes = []
+        combined_boxes.extend(spatial_res.get("heatmap_boxes", []))
+        combined_boxes.extend(temporal_res.get("heatmap_boxes", []))
+        combined_boxes.extend(rppg_res.get("heatmap_boxes", []))
+        combined_boxes.extend(physics_res.get("heatmap_boxes", []))
+
+        combined_boxes = sorted(combined_boxes, key=lambda b: b.get("intensity", 0.0), reverse=True)[:10]
+
+        # Multi-vector forensic diagnostic ratings (0-100% natural health)
+        vector_health = {
+            "sensor_and_optics": round((1.0 - spatial_res["score"]) * 100),
+            "motion_continuity": round((1.0 - temporal_res["score"]) * 100),
+            "biological_pulse": round((1.0 - rppg_res["score"]) * 100) if face_present else 100,
+            "lighting_coherence": round((1.0 - physics_res["score"]) * 100),
+            "audio_naturalness": round((1.0 - audio_res["score"]) * 100) if audio_present else 100
+        }
 
         return {
             "tier": "deep",
-            "latency_ms": elapsed_ms,
             "verdict": verdict,
             "badge_color": badge,
             "status_label": status_label,
             "ai_probability": round(ai_prob, 4),
-            "authenticity_score": round(1.0 - ai_prob, 4),
-            "confidence": round(confidence, 4),
+            "sensitivity_profile": sensitivity,
             "vectors": {
-                "spatial_frequency": {
-                    "score": spatial_res["score"],
-                    "confidence": spatial_res["confidence"],
-                    "artifacts": spatial_res.get("artifacts_detected", [])
-                },
-                "biological_rppg": {
-                    "score": rppg_res["score"],
-                    "confidence": rppg_res["confidence"],
-                    "face_detected": rppg_res.get("face_detected", False),
-                    "bpm_estimate": rppg_res.get("bpm_estimate", 0.0),
-                    "snr_db": rppg_res.get("snr_db", 0.0),
-                    "details": rppg_res.get("details", "")
-                },
-                "temporal_optical_flow": {
-                    "score": temporal_res["score"],
-                    "confidence": temporal_res["confidence"],
-                    "motion_coherence": temporal_res.get("motion_coherence", 1.0),
-                    "edge_shimmering_index": temporal_res.get("edge_shimmering_index", 0.0),
-                    "artifacts": temporal_res.get("artifacts_detected", [])
-                },
-                "physics_and_lighting": {
-                    "score": physics_res["score"],
-                    "confidence": physics_res["confidence"],
-                    "lighting_consistency": physics_res.get("lighting_consistency", 1.0),
-                    "specular_symmetry": physics_res.get("specular_symmetry", 1.0),
-                    "artifacts": physics_res.get("artifacts_detected", [])
-                },
+                "spatial_frequency": spatial_res,
+                "biological_rppg": rppg_res,
+                "temporal_optical_flow": temporal_res,
+                "physics_and_lighting": physics_res,
                 "cross_modal_audio": audio_res,
-                "c2pa_provenance": {
-                    "c2pa_present": c2pa_res.get("c2pa_present", False),
-                    "synthetic_claim": c2pa_res.get("synthetic_claim", False),
-                    "watermark_detected": c2pa_res.get("watermark_detected", False),
-                    "issuer": c2pa_res.get("issuer", None)
-                }
+                "c2pa_attestation": c2pa_res
             },
+            "vector_health": vector_health,
             "failure_points": failure_points,
-            "heatmap_boxes": heatmap_boxes
+            "heatmap_boxes": combined_boxes
         }

@@ -1,7 +1,8 @@
 """
-Spatial Frequency, Sensor Noise Residual (PRNU), and Upsampler Artifacts Detector.
-Analyzes hardware camera sensor noise residuals, Laplacian dispersion kurtosis,
-and 2D FFT spectral checkerboard lattice harmonics.
+Spatial Frequency, Sensor Noise Residual (PRNU), Error Level Analysis (ELA),
+and Optical Chromatic Dispersion Detector.
+Evaluates hardware camera sensor noise, JPEG compression error gradients,
+sub-pixel chromatic aberration, and 2D FFT neural upsampler lattice harmonics.
 """
 
 from typing import List, Dict, Any, Tuple
@@ -27,13 +28,57 @@ class SpatialFFTDetector:
         kurtosis_res = float(mean_4th / (var_res ** 2))
         return std_res, kurtosis_res
 
+    def _analyze_chromatic_aberration(self, frame_bgr: np.ndarray) -> Tuple[float, bool]:
+        """
+        Analyze radial optical chromatic aberration (optical physics of real glass camera lenses).
+        Real camera lenses split light wavelengths towards frame corners (sub-pixel R vs B edge shifts).
+        AI generative video renders synthetic color transitions lacking physical optical dispersion.
+        """
+        if frame_bgr is None or frame_bgr.shape[0] < 60 or frame_bgr.shape[1] < 60:
+            return 0.5, False
+
+        b, g, r = cv2.split(frame_bgr)
+        # Compute gradient magnitudes in Red and Blue channels
+        grad_r_x = cv2.Sobel(r, cv2.CV_32F, 1, 0, ksize=3)
+        grad_r_y = cv2.Sobel(r, cv2.CV_32F, 0, 1, ksize=3)
+        mag_r = np.sqrt(grad_r_x**2 + grad_r_y**2)
+
+        grad_b_x = cv2.Sobel(b, cv2.CV_32F, 1, 0, ksize=3)
+        grad_b_y = cv2.Sobel(b, cv2.CV_32F, 0, 1, ksize=3)
+        mag_b = np.sqrt(grad_b_x**2 + grad_b_y**2)
+
+        # Difference between R and B channel high-contrast edges
+        edge_mask = (mag_r > 30) | (mag_b > 30)
+        if np.sum(edge_mask) > 100:
+            dispersion_diff = np.abs(mag_r[edge_mask] - mag_b[edge_mask])
+            mean_dispersion = float(np.mean(dispersion_diff))
+            has_optical_dispersion = bool(mean_dispersion > 3.5)
+            return mean_dispersion, has_optical_dispersion
+        return 0.0, False
+
+    def _compute_error_level_analysis(self, frame_bgr: np.ndarray) -> float:
+        """
+        Error Level Analysis (ELA) - measures compression error gradients.
+        Uniform natural frames compress with homogeneous error; AI inpainted or synthetic
+        diffusion content exhibits distinct compression error discrepancies.
+        """
+        encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 90]
+        _, encoded = cv2.imencode('.jpg', frame_bgr, encode_param)
+        recompressed = cv2.imdecode(encoded, cv2.IMREAD_COLOR)
+
+        diff = cv2.absdiff(frame_bgr, recompressed).astype(np.float32)
+        mean_ela = float(np.mean(diff))
+        std_ela = float(np.std(diff))
+        ela_inconsistency = std_ela / (mean_ela + 1e-6)
+        return ela_inconsistency
+
     def analyze_frame(self, frame_bgr: np.ndarray) -> Dict[str, Any]:
         """
-        Analyze a single video frame for spatial domain and sensor noise anomalies.
+        Analyze a single video frame for spatial domain, noise residual, and optical anomalies.
         """
         if frame_bgr is None or frame_bgr.size == 0:
             return {
-                "score": 0.05,
+                "score": 0.04,
                 "confidence": 0.5,
                 "high_freq_ratio": 0.0,
                 "checkerboard_peaks": 0,
@@ -52,7 +97,13 @@ class SpatialFFTDetector:
         # 1. Hardware Camera Sensor Noise Residual Analysis (PRNU proxy)
         std_res, kurtosis_res = self._extract_noise_residual_stats(gray)
 
-        # 2. 2D FFT Spectral Analysis on native patches without resampling distortion
+        # 2. Optical Chromatic Aberration & Lens Physics
+        dispersion_val, has_dispersion = self._analyze_chromatic_aberration(frame_bgr)
+
+        # 3. Error Level Analysis (ELA)
+        ela_inconsistency = self._compute_error_level_analysis(frame_bgr) if len(frame_bgr.shape) == 3 else 1.0
+
+        # 4. 2D FFT Spectral Analysis on native patches without resampling distortion
         patch_size = 128
         heatmap_boxes = []
         patch_peak_ratios = []
@@ -85,7 +136,7 @@ class SpatialFFTDetector:
         max_patch_peak = max(patch_peak_ratios) if patch_peak_ratios else 0.0
         severe_patches = len(heatmap_boxes)
 
-        # 3. Overall FFT 1/f decay analysis on central crop
+        # 5. Overall FFT 1/f decay analysis on central crop
         eval_sz = min(h, w, 384)
         cy_crop, cx_crop = (h - eval_sz) // 2, (w - eval_sz) // 2
         crop_gray = gray[cy_crop:cy_crop + eval_sz, cx_crop:cx_crop + eval_sz]
@@ -120,7 +171,7 @@ class SpatialFFTDetector:
         else:
             slope = -1.0
 
-        # Score calculation combining Sensor Noise Residual + Spectral Lattice
+        # Multi-factor score aggregation
         score = 0.04
         artifacts_detected = []
 
@@ -145,6 +196,10 @@ class SpatialFFTDetector:
             score = max(score, 0.75)
             artifacts_detected.append(f"unnatural_inverted_spectral_slope ({slope:.2f})")
 
+        # Natural physical optical lens bonus (reduces AI score when optical dispersion is verified)
+        if has_dispersion and score < 0.50:
+            score = max(0.02, score * 0.75)
+
         score = float(np.clip(score, 0.02, 0.99))
         confidence = float(np.clip(abs(score - 0.5) * 2.0 + 0.40, 0.55, 0.99))
 
@@ -155,6 +210,8 @@ class SpatialFFTDetector:
             "spectral_slope": round(float(slope), 4),
             "sensor_noise_std": round(std_res, 3),
             "sensor_noise_kurtosis": round(kurtosis_res, 2),
+            "chromatic_dispersion": round(dispersion_val, 2),
+            "ela_inconsistency": round(ela_inconsistency, 2),
             "checkerboard_peaks": severe_patches,
             "peak_prominence": round(max_patch_peak, 3),
             "artifacts_detected": artifacts_detected,
@@ -166,14 +223,13 @@ class SpatialFFTDetector:
         Analyze a temporal burst of frames.
         """
         if not frames_bgr:
-            return {"score": 0.05, "confidence": 0.5, "artifacts_detected": [], "heatmap_boxes": []}
+            return {"score": 0.04, "confidence": 0.5, "artifacts_detected": [], "heatmap_boxes": []}
 
         frame_results = [self.analyze_frame(f) for f in frames_bgr]
         scores = [r["score"] for r in frame_results]
         max_score = max(scores)
         avg_score = float(np.mean(scores))
 
-        # If any single frame exhibits severe neural upsampler lattice or noise anomalies, elevate score
         final_score = max_score if max_score > 0.65 else avg_score
 
         all_artifacts = set()
