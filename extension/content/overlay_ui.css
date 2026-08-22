@@ -225,11 +225,15 @@
   backdrop-filter: blur(28px) saturate(180%) !important;
   -webkit-backdrop-filter: blur(28px) saturate(180%) !important;
   z-index: 2147483647 !important;
-  display: flex !important;
+  display: none !important;
   align-items: center;
   justify-content: center;
   padding: 20px;
   animation: modalFadeIn 0.25s ease-out;
+}
+
+.por-modal-backdrop.por-active {
+  display: flex !important;
 }
 
 @keyframes modalFadeIn {

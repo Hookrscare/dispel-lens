@@ -624,11 +624,13 @@ class OverlayUI {
       if (onRescan) onRescan();
     };
 
+    this.modalEl.classList.add("por-active");
     this.modalEl.style.display = "flex";
   }
 
   closeModal() {
     if (this.modalEl) {
+      this.modalEl.classList.remove("por-active");
       this.modalEl.style.display = "none";
     }
   }
