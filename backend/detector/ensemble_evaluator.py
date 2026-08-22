@@ -2,7 +2,7 @@
 Multimodal Ensemble Evaluator & Calibrated Fusion Engine.
 Aggregates spatial frequency, sensor noise residuals (PRNU), optical flow motion-compensated warping,
 biological rPPG hemodynamics, physical lighting coherence, and audio vocoder spectra.
-Supports user sensitivity profiles (Permissive, Balanced, Strict).
+Supports user sensitivity profiles (Permissive, Balanced, Strict) and Side-by-Side Comparison Isolation.
 """
 
 from typing import List, Dict, Any, Optional
@@ -46,7 +46,14 @@ class EnsembleEvaluator:
         synth_thresh = 0.65 if sensitivity == "permissive" else 0.45 if sensitivity == "strict" else 0.55
         auth_thresh = 0.50 if sensitivity == "permissive" else 0.35 if sensitivity == "strict" else 0.45
 
-        if ai_prob >= synth_thresh:
+        is_split = spatial_res.get("is_split_comparison", False)
+        split_details = spatial_res.get("split_details", {})
+
+        if is_split:
+            verdict = "COMPARISON_SPLIT"
+            badge = "AMBER"
+            status_label = "Side-by-Side: Real vs AI Deepfake"
+        elif ai_prob >= synth_thresh:
             verdict = "SYNTHETIC"
             badge = "RED"
             status_label = f"AI Video Detected ({round(ai_prob * 100)}% AI)"
@@ -66,6 +73,8 @@ class EnsembleEvaluator:
             "badge_color": badge,
             "status_label": status_label,
             "ai_probability": round(ai_prob, 4),
+            "is_comparison": is_split,
+            "split_details": split_details,
             "confidence": spatial_res["confidence"],
             "artifacts_detected": spatial_res.get("artifacts_detected", []),
             "heatmap_boxes": spatial_res.get("heatmap_boxes", [])
@@ -76,7 +85,8 @@ class EnsembleEvaluator:
         frames_bgr: List[np.ndarray],
         audio_sample_base64: Optional[str] = None,
         c2pa_manifest_bytes: Optional[bytes] = None,
-        sensitivity: str = "balanced"
+        sensitivity: str = "balanced",
+        video_title: str = ""
     ) -> Dict[str, Any]:
         """
         Deep tier multimodal analysis across spatial, temporal, biological, physical, and acoustic dimensions.
@@ -94,6 +104,14 @@ class EnsembleEvaluator:
 
         face_present = rppg_res.get("face_detected", False)
         audio_present = audio_res.get("audio_present", False)
+        is_bio_comparison = rppg_res.get("is_comparison", False)
+        is_spatial_split = spatial_res.get("is_split_comparison", False)
+
+        title_lower = video_title.lower() if video_title else ""
+        comparison_keywords = ["vs", "compare", "comparison", "real vs", "fake vs", "deepfake vs", "ai vs"]
+        title_indicates_comparison = any(k in title_lower for k in comparison_keywords)
+
+        is_comparison = is_bio_comparison or is_spatial_split or (title_indicates_comparison and (face_present or spatial_res["score"] > 0.4))
 
         # 2. Dynamic multi-modal weighting
         if face_present and audio_present:
@@ -105,7 +123,6 @@ class EnsembleEvaluator:
         else:
             w_spatial, w_rppg, w_temporal, w_physics, w_audio = 0.40, 0.0, 0.35, 0.25, 0.0
 
-        # Baseline linear weighted combination
         weighted_score = (
             w_spatial * spatial_res["score"] +
             w_rppg * (rppg_res["score"] if face_present else 0.0) +
@@ -114,7 +131,6 @@ class EnsembleEvaluator:
             w_audio * (audio_res["score"] if audio_present else 0.0)
         )
 
-        # Collect individual high-confidence anomaly spikes
         active_vector_scores = [
             spatial_res["score"],
             rppg_res["score"] if (face_present and rppg_res.get("biological_signals_present") is False and rppg_res.get("snr_db", 0.0) < -8.0) else 0.0,
@@ -124,7 +140,6 @@ class EnsembleEvaluator:
         ]
         max_vector_score = max(active_vector_scores)
 
-        # Non-linear forensic boost: if any vector independently detects a definitive anomaly
         if max_vector_score >= 0.70:
             raw_ai_prob = max_vector_score
         elif max_vector_score >= 0.55:
@@ -132,7 +147,6 @@ class EnsembleEvaluator:
         else:
             raw_ai_prob = weighted_score
 
-        # C2PA override if definitive cryptographic claim exists
         if c2pa_res.get("synthetic_claim"):
             raw_ai_prob = max(raw_ai_prob, 0.96)
         elif c2pa_res.get("watermark_detected"):
@@ -140,11 +154,14 @@ class EnsembleEvaluator:
 
         ai_prob = float(np.clip(raw_ai_prob, 0.02, 0.99))
 
-        # Apply Sensitivity Profiles
         synth_thresh = 0.65 if sensitivity == "permissive" else 0.45 if sensitivity == "strict" else 0.55
         auth_thresh = 0.50 if sensitivity == "permissive" else 0.35 if sensitivity == "strict" else 0.45
 
-        if ai_prob >= synth_thresh:
+        if is_comparison:
+            verdict = "COMPARISON_SPLIT"
+            badge = "AMBER"
+            status_label = "Side-by-Side Comparison: Real vs AI Deepfake"
+        elif ai_prob >= synth_thresh:
             verdict = "SYNTHETIC"
             badge = "RED"
             status_label = f"AI Generated ({round(ai_prob * 100)}% Synthetic Probability)"
@@ -160,6 +177,8 @@ class EnsembleEvaluator:
 
         # Aggregate Failure Points
         failure_points = []
+        if is_comparison:
+            failure_points.append("Comparison Stream: Contains both Original Authentic footage and AI Deepfake manipulation")
         for a in spatial_res.get("artifacts_detected", []):
             failure_points.append(f"Spatial: {a}")
         for a in temporal_res.get("artifacts_detected", []):
@@ -179,7 +198,6 @@ class EnsembleEvaluator:
 
         combined_boxes = sorted(combined_boxes, key=lambda b: b.get("intensity", 0.0), reverse=True)[:10]
 
-        # Multi-vector forensic diagnostic ratings (0-100% natural health)
         vector_health = {
             "sensor_and_optics": round((1.0 - spatial_res["score"]) * 100),
             "motion_continuity": round((1.0 - temporal_res["score"]) * 100),
@@ -194,6 +212,9 @@ class EnsembleEvaluator:
             "badge_color": badge,
             "status_label": status_label,
             "ai_probability": round(ai_prob, 4),
+            "is_comparison": is_comparison,
+            "subjects": rppg_res.get("subjects", []),
+            "split_details": spatial_res.get("split_details", {}),
             "sensitivity_profile": sensitivity,
             "vectors": {
                 "spatial_frequency": spatial_res,

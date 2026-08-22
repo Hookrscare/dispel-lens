@@ -55,6 +55,7 @@ class FrameBurstRequest(BaseModel):
     user_id: Optional[str] = Field("anonymous_user", description="User ID or API key for quota tracking")
     requested_tier: Optional[str] = Field("deep", description="Execution tier: fast or deep")
     sensitivity: Optional[str] = Field("balanced", description="Sensitivity profile: permissive, balanced, or strict")
+    title: Optional[str] = Field(None, description="Optional title of the video stream")
 
 
 class CertificateRequest(BaseModel):
@@ -174,7 +175,8 @@ async def analyze_video_frames(payload: FrameBurstRequest):
     result = evaluator.evaluate_deep_tier(
         decoded_frames,
         audio_sample_base64=payload.audio_sample_base64,
-        sensitivity=payload.sensitivity or "balanced"
+        sensitivity=payload.sensitivity or "balanced",
+        video_title=payload.title or ""
     )
 
     result["video_id"] = payload.video_id

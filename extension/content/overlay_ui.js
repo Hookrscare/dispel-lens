@@ -1,7 +1,7 @@
 /**
- * Dispel Lens — In-Player Ambient HUD, X-Ray Reality Vision & Viral Forensic Proof Generator.
- * World-first interactive in-video forensic HUD with live PRNU noise filters,
- * real-time biological ECG pulse monitor, and 1-click viral Twitter/press cryptographic proof cards.
+ * Dispel Lens — In-Player Ambient HUD, 3D Glass Dock & Multi-Subject Comparison Reality Inspector.
+ * Apple Vision Pro liquid glassmorphism, 3D perspective depth, and neon quantum optics.
+ * Includes Side-by-Side Comparison Isolation (Real vs Deepfake).
  */
 
 class OverlayUI {
@@ -10,7 +10,7 @@ class OverlayUI {
     this.currentData = null;
     this.heatmapCanvas = null;
     this.isHeatmapVisible = true;
-    this.activeXRayMode = "none"; // 'none', 'prnu_noise', 'ecg_pulse', 'spectral_lattice', 'motion_warp'
+    this.activeXRayMode = "none";
     this.ecgAnimationId = null;
     this._initModalDOM();
     this._initFloatingDockDOM();
@@ -176,13 +176,14 @@ class OverlayUI {
     if (!badgeEl) return;
     const isSynthetic = fastData.verdict === "SYNTHETIC";
     const isAuthentic = fastData.verdict === "AUTHENTIC";
+    const isComparison = fastData.is_comparison || fastData.verdict === "COMPARISON_SPLIT";
 
     badgeEl.className = "por-badge-container " + 
-      (isAuthentic ? "por-badge-green" : isSynthetic ? "por-badge-red" : "por-badge-amber");
+      (isComparison ? "por-badge-amber" : isAuthentic ? "por-badge-green" : isSynthetic ? "por-badge-red" : "por-badge-amber");
 
-    const color = isAuthentic ? "#00E599" : isSynthetic ? "#FF3366" : "#FFB800";
-    const label = isAuthentic ? "DISPEL: AUTHENTIC" : isSynthetic ? "DISPEL: AI VIDEO" : "DISPEL: SCANNING";
-    const scorePct = Math.round((1.0 - fastData.ai_probability) * 100) + "%";
+    const color = isComparison ? "#FFB800" : isAuthentic ? "#00E599" : isSynthetic ? "#FF3366" : "#FFB800";
+    const label = isComparison ? "DISPEL: REAL VS FAKE" : isAuthentic ? "DISPEL: AUTHENTIC" : isSynthetic ? "DISPEL: AI VIDEO" : "DISPEL: SCANNING";
+    const scorePct = isComparison ? "SPLIT" : Math.round((1.0 - fastData.ai_probability) * 100) + "%";
 
     badgeEl.innerHTML = `
       <div class="por-shield-icon">
@@ -197,15 +198,18 @@ class OverlayUI {
     if (!badgeEl) return;
     this.currentData = deepData;
 
+    const isComparison = deepData.is_comparison || deepData.verdict === "COMPARISON_SPLIT";
     const isSynthetic = deepData.verdict === "SYNTHETIC";
     const isAuthentic = deepData.verdict === "AUTHENTIC";
 
     badgeEl.className = "por-badge-container " + 
-      (isAuthentic ? "por-badge-green" : isSynthetic ? "por-badge-red" : "por-badge-amber");
+      (isComparison ? "por-badge-amber" : isAuthentic ? "por-badge-green" : isSynthetic ? "por-badge-red" : "por-badge-amber");
 
-    const color = isAuthentic ? "#00E599" : isSynthetic ? "#FF3366" : "#FFB800";
-    const label = isAuthentic ? "DISPEL: VERIFIED" : isSynthetic ? "DISPEL: AI VIDEO" : "DISPEL: CHECKING";
-    const scorePct = isAuthentic 
+    const color = isComparison ? "#FFB800" : isAuthentic ? "#00E599" : isSynthetic ? "#FF3366" : "#FFB800";
+    const label = isComparison ? "DISPEL: REAL VS DEEPFAKE" : isAuthentic ? "DISPEL: VERIFIED" : isSynthetic ? "DISPEL: AI VIDEO" : "DISPEL: CHECKING";
+    const scorePct = isComparison 
+      ? "SPLIT" 
+      : isAuthentic 
       ? Math.round((1.0 - deepData.ai_probability) * 100) + "%" 
       : Math.round(deepData.ai_probability * 100) + "% AI";
     const cacheTag = deepData.cached ? `<span style="font-family: monospace; font-size: 8.5px; background: rgba(0,229,255,0.2); color: #00E5FF; padding: 1px 4px; border-radius: 3px; margin-left: 2px;">⚡0ms</span>` : "";
@@ -270,7 +274,6 @@ class OverlayUI {
     ctx.fillStyle = "rgba(0, 229, 255, 0.08)";
     ctx.fillRect(0, 0, rect.width, rect.height);
 
-    // High-pass grain noise visualization grid
     ctx.strokeStyle = "rgba(0, 229, 255, 0.4)";
     ctx.lineWidth = 1;
     ctx.strokeRect(10, 10, rect.width - 20, rect.height - 20);
@@ -301,7 +304,7 @@ class OverlayUI {
       ctx.clearRect(0, 0, rect.width, rect.height);
 
       const ecgY = rect.height - 70;
-      const ecgW = Math.min(320, rect.width - 40);
+      const ecgW = Math.min(340, rect.width - 40);
 
       ctx.fillStyle = "rgba(7, 10, 16, 0.9)";
       ctx.strokeStyle = isSynthetic ? "rgba(255, 51, 102, 0.4)" : "rgba(0, 229, 153, 0.4)";
@@ -309,25 +312,23 @@ class OverlayUI {
       ctx.fillRect(20, ecgY - 24, ecgW, 80);
       ctx.strokeRect(20, ecgY - 24, ecgW, 80);
 
-      // Label
       ctx.fillStyle = isSynthetic ? "#FF3366" : "#00E599";
       ctx.font = "bold 10px monospace";
       ctx.fillText(isSynthetic ? "💓 BIOMETRIC PULSE: FLATLINE / DESYNC" : `💓 BIOMETRIC HEMODYNAMICS: ${bpm} BPM LOCKED`, 30, ecgY - 8);
 
-      // Waveform
       ctx.beginPath();
       ctx.strokeStyle = isSynthetic ? "#FF3366" : "#00E599";
       ctx.lineWidth = 2;
       for (let x = 0; x < ecgW - 20; x++) {
         let wave = 0;
         if (isSynthetic) {
-          wave = Math.sin((x + step) * 0.05) * 2; // flat synthetic drift
+          wave = Math.sin((x + step) * 0.05) * 2;
         } else {
           const phase = (x + step * 3) % 100;
-          if (phase > 40 && phase < 45) wave = -15; // Q
-          else if (phase >= 45 && phase < 52) wave = 25; // R peak
-          else if (phase >= 52 && phase < 58) wave = -10; // S
-          else if (phase >= 70 && phase < 85) wave = 6; // T wave
+          if (phase > 40 && phase < 45) wave = -15;
+          else if (phase >= 45 && phase < 52) wave = 25;
+          else if (phase >= 52 && phase < 58) wave = -10;
+          else if (phase >= 70 && phase < 85) wave = 6;
         }
         if (x === 0) ctx.moveTo(30 + x, ecgY + 28 - wave);
         else ctx.lineTo(30 + x, ecgY + 28 - wave);
@@ -391,19 +392,23 @@ class OverlayUI {
       const bw = box.width * scaleX;
       const bh = box.height * scaleY;
 
-      ctx.strokeStyle = "rgba(255, 51, 102, 0.9)";
+      const isAuthenticBox = (box.type && box.type.includes("AUTHENTIC")) || (box.intensity < 0.25);
+      const strokeColor = isAuthenticBox ? "rgba(0, 229, 153, 0.9)" : "rgba(255, 51, 102, 0.9)";
+      const fillColor = isAuthenticBox ? "rgba(0, 229, 153, 0.15)" : `rgba(255, 51, 102, ${Math.min(0.35, (box.intensity || 0.5) * 0.4)})`;
+
+      ctx.strokeStyle = strokeColor;
       ctx.lineWidth = 2;
-      ctx.fillStyle = `rgba(255, 51, 102, ${Math.min(0.35, (box.intensity || 0.5) * 0.4)})`;
+      ctx.fillStyle = fillColor;
 
       ctx.fillRect(bx, by, bw, bh);
       ctx.strokeRect(bx, by, bw, bh);
 
       const label = (box.type || "Anomaly").replace(/_/g, " ").toUpperCase();
       ctx.fillStyle = "rgba(7, 10, 16, 0.92)";
-      ctx.fillRect(bx, by - 18, Math.min(bw, 190), 18);
-      ctx.fillStyle = "#00E5FF";
+      ctx.fillRect(bx, by - 18, Math.min(bw, 200), 18);
+      ctx.fillStyle = isAuthenticBox ? "#00E599" : "#FF3366";
       ctx.font = "bold 9px monospace";
-      ctx.fillText(label.slice(0, 26), bx + 4, by - 5);
+      ctx.fillText(label.slice(0, 28), bx + 4, by - 5);
     });
   }
 
@@ -414,9 +419,6 @@ class OverlayUI {
     }
   }
 
-  /**
-   * Generates a 1200x630 viral cryptographic reality proof card and copies to clipboard.
-   */
   async generateAndCopyViralProofCard() {
     const data = this.currentData || {
       verdict: "AUTHENTIC",
@@ -425,6 +427,7 @@ class OverlayUI {
       status_label: "Verified Authentic"
     };
 
+    const isComparison = data.is_comparison || data.verdict === "COMPARISON_SPLIT";
     const isAuth = data.badge_color === "GREEN";
     const aiPct = Math.round((data.ai_probability || 0.04) * 100);
     const authPct = 100 - aiPct;
@@ -435,19 +438,16 @@ class OverlayUI {
     c.height = 630;
     const ctx = c.getContext("2d");
 
-    // Background gradient
     const grad = ctx.createLinearGradient(0, 0, 1200, 630);
     grad.addColorStop(0, "#070A10");
     grad.addColorStop(1, "#0F1420");
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, 1200, 630);
 
-    // Glowing border
-    ctx.strokeStyle = isAuth ? "#00E599" : "#FF3366";
+    ctx.strokeStyle = isComparison ? "#FFB800" : isAuth ? "#00E599" : "#FF3366";
     ctx.lineWidth = 4;
     ctx.strokeRect(16, 16, 1168, 598);
 
-    // Header
     ctx.fillStyle = "#00E5FF";
     ctx.font = "bold 22px monospace";
     ctx.fillText("DISPEL LENS // CRYPTOGRAPHIC PROOF OF REALITY", 60, 70);
@@ -456,22 +456,21 @@ class OverlayUI {
     ctx.font = "14px monospace";
     ctx.fillText(`ATTESTATION HASH: SHA256-${Date.now().toString(16).toUpperCase()} · DISPEL.CLOUD/VERIFY`, 60, 96);
 
-    // Main Verdict Banner
-    ctx.fillStyle = isAuth ? "rgba(0, 229, 153, 0.12)" : "rgba(255, 51, 102, 0.12)";
+    // Main Banner
+    ctx.fillStyle = isComparison ? "rgba(255, 184, 0, 0.12)" : isAuth ? "rgba(0, 229, 153, 0.12)" : "rgba(255, 51, 102, 0.12)";
     ctx.fillRect(60, 130, 1080, 160);
-    ctx.strokeStyle = isAuth ? "rgba(0, 229, 153, 0.5)" : "rgba(255, 51, 102, 0.5)";
+    ctx.strokeStyle = isComparison ? "rgba(255, 184, 0, 0.5)" : isAuth ? "rgba(0, 229, 153, 0.5)" : "rgba(255, 51, 102, 0.5)";
     ctx.lineWidth = 2;
     ctx.strokeRect(60, 130, 1080, 160);
 
-    ctx.fillStyle = isAuth ? "#00E599" : "#FF3366";
-    ctx.font = "bold 44px sans-serif";
-    ctx.fillText(isAuth ? "🟢 VERIFIED AUTHENTIC OPTICAL MEDIA" : "🔴 AI GENERATIVE SYNTHETIC DETECTED", 90, 200);
+    ctx.fillStyle = isComparison ? "#FFB800" : isAuth ? "#00E599" : "#FF3366";
+    ctx.font = "bold 40px sans-serif";
+    ctx.fillText(isComparison ? "⚖️ SIDE-BY-SIDE: REAL VS AI DEEPFAKE COMPARISON" : isAuth ? "🟢 VERIFIED AUTHENTIC OPTICAL MEDIA" : "🔴 AI GENERATIVE SYNTHETIC DETECTED", 90, 200);
 
     ctx.fillStyle = "#F1F5F9";
     ctx.font = "20px monospace";
-    ctx.fillText(isAuth ? `NATURAL SIGNAL COHERENCE: ${authPct}% · PHYSICAL SENSOR PRNU VERIFIED` : `AI SYNTHETIC PROBABILITY: ${aiPct}% · PERIODIC HARMONICS FLAGGED`, 90, 245);
+    ctx.fillText(isComparison ? "DUAL STREAM DETECTED: LEFT (ORIGINAL REAL) vs RIGHT (AI SWAP FLAGGED)" : isAuth ? `NATURAL SIGNAL COHERENCE: ${authPct}% · PHYSICAL SENSOR PRNU VERIFIED` : `AI SYNTHETIC PROBABILITY: ${aiPct}% · PERIODIC HARMONICS FLAGGED`, 90, 245);
 
-    // Video Subject Box
     ctx.fillStyle = "#1E293B";
     ctx.fillRect(60, 320, 1080, 70);
     ctx.fillStyle = "#94A3B8";
@@ -481,12 +480,11 @@ class OverlayUI {
     ctx.font = "bold 18px sans-serif";
     ctx.fillText(title.slice(0, 75), 230, 360);
 
-    // 4 Forensic Radar Metric Tiles
     const metrics = [
-      { label: "CMOS SENSOR PRNU", score: isAuth ? "98% NATURAL" : "12% NATURAL", color: isAuth ? "#00E599" : "#FF3366" },
-      { label: "OPTICAL MOTION WARP", score: isAuth ? "96% COHERENT" : "18% COHERENT", color: isAuth ? "#00E599" : "#FF3366" },
-      { label: "BIOMETRIC HEMODYNAMICS", score: isAuth ? "PULSE LOCKED" : "DESYNC / ABSENT", color: isAuth ? "#00E599" : "#FF3366" },
-      { label: "VOICE VOCODER FREQ", score: isAuth ? "ANALOG SPECTRA" : "SYNTHETIC CUTOFF", color: isAuth ? "#00E599" : "#FF3366" }
+      { label: "CMOS SENSOR PRNU", score: isComparison ? "DUAL GRAIN DETECTED" : isAuth ? "98% NATURAL" : "12% NATURAL", color: isAuth ? "#00E599" : "#FF3366" },
+      { label: "OPTICAL MOTION WARP", score: isComparison ? "SPLIT BOUNDARY WARP" : isAuth ? "96% COHERENT" : "18% COHERENT", color: isAuth ? "#00E599" : "#FF3366" },
+      { label: "BIOMETRIC HEMODYNAMICS", score: isComparison ? "DUAL FACE ISOLATION" : isAuth ? "PULSE LOCKED" : "DESYNC / ABSENT", color: isAuth ? "#00E599" : "#FF3366" },
+      { label: "AUTHENTICITY STATUS", score: isComparison ? "REAL + AI COMPARISON" : isAuth ? "NATURAL" : "SYNTHETIC", color: isComparison ? "#FFB800" : isAuth ? "#00E599" : "#FF3366" }
     ];
 
     metrics.forEach((m, idx) => {
@@ -501,11 +499,10 @@ class OverlayUI {
       ctx.fillText(m.label, mx + 16, 450);
 
       ctx.fillStyle = m.color;
-      ctx.font = "bold 18px monospace";
+      ctx.font = "bold 16px monospace";
       ctx.fillText(m.score, mx + 16, 495);
     });
 
-    // Footer Watermark
     ctx.fillStyle = "#00E5FF";
     ctx.font = "bold 14px monospace";
     ctx.fillText("VERIFIED BY DISPEL LENS (dispel.cloud/verify) · TAMPER-EVIDENT FORENSIC ATTESTATION", 60, 585);
@@ -532,8 +529,9 @@ class OverlayUI {
     const content = document.getElementById("por-modal-content");
     if (!content) return;
 
+    const isComparison = data.is_comparison || data.verdict === "COMPARISON_SPLIT";
     const isAuth = data.badge_color === "GREEN";
-    const vColor = isAuth ? "green" : "red";
+    const vColor = isComparison ? "amber" : isAuth ? "green" : "red";
     const aiPct = Math.round(data.ai_probability * 100);
     const vectors = data.vectors || {};
 
@@ -541,15 +539,15 @@ class OverlayUI {
       <!-- Hero Banner -->
       <div class="por-hero-card ${vColor}">
         <div>
-          <div class="por-hero-verdict" style="color: ${isAuth ? '#00E599' : '#FF3366'};">
-            ${isAuth ? "VERIFIED PHYSICAL OPTICAL MEDIA" : "GENERATIVE NEURAL SYNTHESIS DETECTED"}
+          <div class="por-hero-verdict" style="color: ${isComparison ? '#FFB800' : isAuth ? '#00E599' : '#FF3366'};">
+            ${isComparison ? "⚖️ SIDE-BY-SIDE COMPARISON DETECTED" : isAuth ? "VERIFIED PHYSICAL OPTICAL MEDIA" : "GENERATIVE NEURAL SYNTHESIS DETECTED"}
           </div>
           <div class="por-hero-sub">
-            CONFIDENCE: ${Math.round((data.confidence || 0.92) * 100)}% · LATENCY: ${data.latency_ms || 18}ms · TIER: ENTERPRISE DEEP
+            ${isComparison ? "VIDEO CONTAINS BOTH ORIGINAL AUTHENTIC FOOTAGE AND AI DEEPFAKE MANIPULATION" : `CONFIDENCE: ${Math.round((data.confidence || 0.92) * 100)}% · LATENCY: ${data.latency_ms || 18}ms · TIER: ENTERPRISE DEEP`}
           </div>
         </div>
-        <div class="por-hero-score" style="color: ${isAuth ? '#00E599' : '#FF3366'};">
-          ${aiPct}% <span style="font-size: 10px; color: var(--dispel-muted); display: block; font-weight: 600;">SYNTHETIC</span>
+        <div class="por-hero-score" style="color: ${isComparison ? '#FFB800' : isAuth ? '#00E599' : '#FF3366'};">
+          ${isComparison ? "SPLIT" : `${aiPct}%`} <span style="font-size: 10px; color: var(--dispel-muted); display: block; font-weight: 600;">${isComparison ? "DUAL STREAM" : "SYNTHETIC"}</span>
         </div>
       </div>
 

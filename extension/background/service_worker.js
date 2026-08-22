@@ -97,6 +97,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             body: JSON.stringify({
               video_id: message.payload.videoId || "social_video",
               platform: message.payload.platform || "web",
+              title: message.payload.title || null,
               timestamp_sec: message.payload.timestamp || 0.0,
               frames: message.payload.frames,
               audio_sample_base64: message.payload.audioSample || null,

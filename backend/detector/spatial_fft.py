@@ -3,6 +3,7 @@ Spatial Frequency, Sensor Noise Residual (PRNU), Error Level Analysis (ELA),
 and Optical Chromatic Dispersion Detector.
 Evaluates hardware camera sensor noise, JPEG compression error gradients,
 sub-pixel chromatic aberration, and 2D FFT neural upsampler lattice harmonics.
+Includes Left/Right Split Frame Analysis for side-by-side comparison videos.
 """
 
 from typing import List, Dict, Any, Tuple
@@ -31,14 +32,11 @@ class SpatialFFTDetector:
     def _analyze_chromatic_aberration(self, frame_bgr: np.ndarray) -> Tuple[float, bool]:
         """
         Analyze radial optical chromatic aberration (optical physics of real glass camera lenses).
-        Real camera lenses split light wavelengths towards frame corners (sub-pixel R vs B edge shifts).
-        AI generative video renders synthetic color transitions lacking physical optical dispersion.
         """
         if frame_bgr is None or frame_bgr.shape[0] < 60 or frame_bgr.shape[1] < 60:
             return 0.5, False
 
         b, g, r = cv2.split(frame_bgr)
-        # Compute gradient magnitudes in Red and Blue channels
         grad_r_x = cv2.Sobel(r, cv2.CV_32F, 1, 0, ksize=3)
         grad_r_y = cv2.Sobel(r, cv2.CV_32F, 0, 1, ksize=3)
         mag_r = np.sqrt(grad_r_x**2 + grad_r_y**2)
@@ -47,7 +45,6 @@ class SpatialFFTDetector:
         grad_b_y = cv2.Sobel(b, cv2.CV_32F, 0, 1, ksize=3)
         mag_b = np.sqrt(grad_b_x**2 + grad_b_y**2)
 
-        # Difference between R and B channel high-contrast edges
         edge_mask = (mag_r > 30) | (mag_b > 30)
         if np.sum(edge_mask) > 100:
             dispersion_diff = np.abs(mag_r[edge_mask] - mag_b[edge_mask])
@@ -59,8 +56,6 @@ class SpatialFFTDetector:
     def _compute_error_level_analysis(self, frame_bgr: np.ndarray) -> float:
         """
         Error Level Analysis (ELA) - measures compression error gradients.
-        Uniform natural frames compress with homogeneous error; AI inpainted or synthetic
-        diffusion content exhibits distinct compression error discrepancies.
         """
         encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 90]
         _, encoded = cv2.imencode('.jpg', frame_bgr, encode_param)
@@ -71,6 +66,34 @@ class SpatialFFTDetector:
         std_ela = float(np.std(diff))
         ela_inconsistency = std_ela / (mean_ela + 1e-6)
         return ela_inconsistency
+
+    def _compute_patch_fourier_peak(self, patch_gray: np.ndarray) -> float:
+        """
+        Compute peak-to-background ratio in Fourier spectrum for a single 64x64 patch.
+        """
+        ph, pw = patch_gray.shape
+        window = np.outer(np.hanning(ph), np.hanning(pw))
+        windowed = patch_gray.astype(np.float32) * window
+
+        dft = np.fft.fft2(windowed)
+        dft_shift = np.fft.fftshift(dft)
+        mag = np.abs(dft_shift)
+        log_mag = np.log(mag + 1.0)
+
+        cy, cx = ph // 2, pw // 2
+        y_coords, x_coords = np.ogrid[:ph, :pw]
+        dist = np.sqrt((x_coords - cx) ** 2 + (y_coords - cy) ** 2)
+
+        # Ignore DC component and evaluate high frequencies
+        eval_mask = (dist >= 6) & (dist <= (min(ph, pw) // 2 - 2))
+        if not np.any(eval_mask):
+            return 0.0
+
+        eval_vals = log_mag[eval_mask]
+        median_val = np.median(eval_vals) + 1e-6
+        max_val = np.max(eval_vals)
+        peak_ratio = float(max_val / median_val)
+        return peak_ratio
 
     def analyze_frame(self, frame_bgr: np.ndarray) -> Dict[str, Any]:
         """
@@ -98,55 +121,57 @@ class SpatialFFTDetector:
         std_res, kurtosis_res = self._extract_noise_residual_stats(gray)
 
         # 2. Optical Chromatic Aberration & Lens Physics
-        dispersion_val, has_dispersion = self._analyze_chromatic_aberration(frame_bgr)
+        dispersion_val, has_dispersion = self._analyze_chromatic_aberration(frame_bgr if len(frame_bgr.shape) == 3 else cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR))
 
         # 3. Error Level Analysis (ELA)
-        ela_inconsistency = self._compute_error_level_analysis(frame_bgr) if len(frame_bgr.shape) == 3 else 1.0
+        ela_inconsistency = self._compute_error_level_analysis(frame_bgr if len(frame_bgr.shape) == 3 else cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR))
 
-        # 4. 2D FFT Spectral Analysis on native patches without resampling distortion
-        patch_size = 128
+        # 4. Patch-based 2D FFT Analysis
+        patch_size = 64
+        stride = 48
         heatmap_boxes = []
-        patch_peak_ratios = []
+        severe_patches = 0
+        max_patch_peak = 0.0
 
-        for py in range(0, h - patch_size + 1, patch_size // 2):
-            for px in range(0, w - patch_size + 1, patch_size // 2):
-                patch = gray[py:py + patch_size, px:px + patch_size]
-                pf = np.fft.fftshift(np.fft.fft2(patch.astype(np.float32)))
-                pmag = np.abs(pf)
-                p_center = patch_size // 2
-                py_grid, px_grid = np.ogrid[:patch_size, :patch_size]
-                p_dist = np.sqrt((px_grid - p_center) ** 2 + (py_grid - p_center) ** 2)
-                p_high_mask = p_dist >= (p_center * self.high_freq_cutoff_ratio)
-                p_high_vals = pmag[p_high_mask]
-                if len(p_high_vals) > 0:
-                    p_median = np.median(p_high_vals) + 1e-6
-                    p_peak_ratio = float(np.max(p_high_vals) / p_median)
-                    patch_peak_ratios.append(p_peak_ratio)
+        left_half_peaks = 0
+        right_half_peaks = 0
 
-                    if p_peak_ratio > 30.0:
-                        heatmap_boxes.append({
-                            "x": int(px),
-                            "y": int(py),
-                            "width": patch_size,
-                            "height": patch_size,
-                            "intensity": float(min(1.0, p_peak_ratio / 60.0)),
-                            "type": "spectral_checkerboard_artifact"
-                        })
+        for y in range(0, h - patch_size + 1, stride):
+            for x in range(0, w - patch_size + 1, stride):
+                patch = gray[y:y+patch_size, x:x+patch_size]
+                peak_ratio = self._compute_patch_fourier_peak(patch)
+                if peak_ratio > max_patch_peak:
+                    max_patch_peak = peak_ratio
 
-        max_patch_peak = max(patch_peak_ratios) if patch_peak_ratios else 0.0
-        severe_patches = len(heatmap_boxes)
+                if peak_ratio > 30.0:
+                    severe_patches += 1
+                    if x < w // 2:
+                        left_half_peaks += 1
+                    else:
+                        right_half_peaks += 1
 
-        # 5. Overall FFT 1/f decay analysis on central crop
-        eval_sz = min(h, w, 384)
-        cy_crop, cx_crop = (h - eval_sz) // 2, (w - eval_sz) // 2
-        crop_gray = gray[cy_crop:cy_crop + eval_sz, cx_crop:cx_crop + eval_sz]
-        f_crop = np.fft.fftshift(np.fft.fft2(crop_gray.astype(np.float32)))
-        mag_crop = np.abs(f_crop)
-        log_mag = np.log1p(mag_crop)
+                    intensity = min(1.0, (peak_ratio - 25.0) / 40.0)
+                    heatmap_boxes.append({
+                        "x": int(x),
+                        "y": int(y),
+                        "width": patch_size,
+                        "height": patch_size,
+                        "intensity": round(intensity, 3),
+                        "type": "neural_upsampler_lattice"
+                    })
 
-        c_center = eval_sz // 2
-        cy_g, cx_g = np.ogrid[:eval_sz, :eval_sz]
-        dist_g = np.sqrt((cx_g - c_center) ** 2 + (cy_g - c_center) ** 2)
+        # Global Full-Frame 2D FFT Analysis
+        eval_sz = min(h, w, 256)
+        cy_f, cx_f = h // 2, w // 2
+        crop = gray[cy_f - eval_sz//2 : cy_f + eval_sz//2, cx_f - eval_sz//2 : cx_f + eval_sz//2]
+
+        win_g = np.outer(np.hanning(eval_sz), np.hanning(eval_sz))
+        dft_g = np.fft.fftshift(np.fft.fft2(crop.astype(np.float32) * win_g))
+        mag_crop = np.abs(dft_g)
+        log_mag = np.log(mag_crop + 1.0)
+
+        gy, gx = np.ogrid[:eval_sz, :eval_sz]
+        dist_g = np.sqrt((gx - eval_sz//2)**2 + (gy - eval_sz//2)**2)
         max_r = eval_sz // 2
 
         high_mask = dist_g >= (max_r * self.high_freq_cutoff_ratio)
@@ -200,6 +225,21 @@ class SpatialFFTDetector:
         if has_dispersion and score < 0.50:
             score = max(0.02, score * 0.75)
 
+        # Check for Left / Right Split comparison asymmetry
+        is_split_comparison = False
+        split_details = {}
+        if w >= 200:
+            if (left_half_peaks == 0 and right_half_peaks >= 2) or (right_half_peaks == 0 and left_half_peaks >= 2):
+                is_split_comparison = True
+                real_side = "left" if right_half_peaks >= 2 else "right"
+                fake_side = "right" if right_half_peaks >= 2 else "left"
+                split_details = {
+                    "is_split": True,
+                    "real_side": real_side,
+                    "fake_side": fake_side,
+                    "description": f"Side-by-side split: {real_side.upper()} panel is Authentic Camera, {fake_side.upper()} panel is AI Deepfake"
+                }
+
         score = float(np.clip(score, 0.02, 0.99))
         confidence = float(np.clip(abs(score - 0.5) * 2.0 + 0.40, 0.55, 0.99))
 
@@ -214,6 +254,8 @@ class SpatialFFTDetector:
             "ela_inconsistency": round(ela_inconsistency, 2),
             "checkerboard_peaks": severe_patches,
             "peak_prominence": round(max_patch_peak, 3),
+            "is_split_comparison": is_split_comparison,
+            "split_details": split_details,
             "artifacts_detected": artifacts_detected,
             "heatmap_boxes": heatmap_boxes[:8]
         }
@@ -234,6 +276,9 @@ class SpatialFFTDetector:
 
         all_artifacts = set()
         all_boxes = []
+        is_split = any(r.get("is_split_comparison", False) for r in frame_results)
+        split_details = next((r.get("split_details", {}) for r in frame_results if r.get("is_split_comparison")), {})
+
         for r in frame_results:
             for art in r.get("artifacts_detected", []):
                 all_artifacts.add(art)
@@ -244,6 +289,8 @@ class SpatialFFTDetector:
         return {
             "score": round(final_score, 4),
             "confidence": round(float(np.mean([r["confidence"] for r in frame_results])), 4),
+            "is_split_comparison": is_split,
+            "split_details": split_details,
             "artifacts_detected": list(all_artifacts),
             "heatmap_boxes": all_boxes,
             "frame_scores": [round(s, 4) for s in scores]

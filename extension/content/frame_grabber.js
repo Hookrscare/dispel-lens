@@ -90,6 +90,7 @@ class VideoFrameGrabber {
         type: "frame_burst",
         videoId: videoId || `asset_${Date.now()}`,
         platform: platform,
+        title: document.title || "Social Video Stream",
         timestamp: videoElement.currentTime || 0.0,
         frames: frameBurst
       };

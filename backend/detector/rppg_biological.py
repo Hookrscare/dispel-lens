@@ -2,7 +2,7 @@
 Biological Signals & rPPG (Remote Photoplethysmography) Detector.
 Detects cardiac pulse-induced blood volume pulse (BVP) skin chrominance oscillations
 and tracks facial micro-saccades / blink regularity across temporal frame bursts.
-AI-generated faces lack coherent cardiac hemodynamic signatures.
+Includes Multi-Subject / Side-by-Side Comparison Isolation (Real vs Deepfake).
 """
 
 from typing import List, Dict, Any, Optional, Tuple
@@ -16,12 +16,12 @@ class RPPGBiologicalDetector:
         self.min_hz = min_bpm / 60.0  # ~0.7 Hz
         self.max_hz = max_bpm / 60.0  # ~3.0 Hz
 
-    def _locate_face_skin_roi(self, frame_bgr: np.ndarray) -> Tuple[Optional[Tuple[int, int, int, int]], Optional[np.ndarray]]:
+    def _locate_all_face_skin_rois(self, frame_bgr: np.ndarray) -> List[Tuple[Tuple[int, int, int, int], np.ndarray]]:
         """
-        Locate face bounding box and extract forehead/cheek skin ROI using robust color space segmentation.
+        Locate all face bounding boxes and extract skin ROIs (supports multiple faces for comparisons).
         """
         if frame_bgr is None or frame_bgr.size == 0:
-            return None, None
+            return []
 
         h, w = frame_bgr.shape[:2]
         
@@ -30,7 +30,6 @@ class RPPGBiologicalDetector:
         cr = ycrcb[:, :, 1]
         cb = ycrcb[:, :, 2]
 
-        # HSV for brightness & saturation bounding
         hsv = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2HSV)
         h_channel = hsv[:, :, 0]
         s_channel = hsv[:, :, 1]
@@ -44,54 +43,38 @@ class RPPGBiologicalDetector:
             (v_channel >= 40)
         ).astype(np.uint8) * 255
 
-        # Morphological opening and closing to clean noise
         kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
         skin_mask = cv2.morphologyEx(skin_mask, cv2.MORPH_OPEN, kernel)
         skin_mask = cv2.morphologyEx(skin_mask, cv2.MORPH_CLOSE, kernel)
 
-        # Find largest face-like connected component
         num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(skin_mask)
         
-        best_box = None
-        max_area = 0
-        min_face_area = (h * w) * 0.015  # At least 1.5% of the frame
+        face_rois = []
+        min_face_area = (h * w) * 0.012  # At least 1.2% of the frame
 
         for i in range(1, num_labels):
             area = stats[i, cv2.CC_STAT_AREA]
-            if area > min_face_area and area > max_area:
-                bx = stats[i, cv2.CC_STAT_LEFT]
-                by = stats[i, cv2.CC_STAT_TOP]
-                bw = stats[i, cv2.CC_STAT_WIDTH]
-                bh = stats[i, cv2.CC_STAT_HEIGHT]
-                aspect_ratio = bh / float(bw)
+            if area > min_face_area:
+                bx = int(stats[i, cv2.CC_STAT_LEFT])
+                by = int(stats[i, cv2.CC_STAT_TOP])
+                bw = int(stats[i, cv2.CC_STAT_WIDTH])
+                bh = int(stats[i, cv2.CC_STAT_HEIGHT])
+                aspect_ratio = bh / float(bw + 1e-6)
 
-                # Face aspect ratio typically 0.8 to 2.0
-                if 0.7 <= aspect_ratio <= 2.2:
-                    best_box = (bx, by, bw, bh)
-                    max_area = area
+                if 0.65 <= aspect_ratio <= 2.4:
+                    # Forehead ROI
+                    fy1 = int(by + 0.15 * bh)
+                    fy2 = int(by + 0.45 * bh)
+                    fx1 = int(bx + 0.20 * bw)
+                    fx2 = int(bx + 0.80 * bw)
+                    skin_roi = frame_bgr[fy1:fy2, fx1:fx2]
+                    if skin_roi.size == 0:
+                        skin_roi = frame_bgr[by:by+bh, bx:bx+bw]
+                    face_rois.append(((bx, by, bw, bh), skin_roi))
 
-        if best_box is None:
-            # Fallback: check if central region has skin pixels
-            skin_ratio = np.sum(skin_mask > 0) / (h * w)
-            if skin_ratio > 0.05:
-                # Center box
-                cx, cy = w // 4, h // 4
-                best_box = (cx, cy, w // 2, h // 2)
-            else:
-                return None, None
-
-        bx, by, bw, bh = best_box
-        # Extract forehead ROI (top 15% to 40% of face box, center 60%)
-        fy1 = int(by + 0.15 * bh)
-        fy2 = int(by + 0.40 * bh)
-        fx1 = int(bx + 0.20 * bw)
-        fx2 = int(bx + 0.80 * bw)
-
-        skin_roi = frame_bgr[fy1:fy2, fx1:fx2]
-        if skin_roi.size == 0:
-            skin_roi = frame_bgr[by:by+bh, bx:bx+bw]
-
-        return best_box, skin_roi
+        # Sort left to right
+        face_rois = sorted(face_rois, key=lambda f: f[0][0])
+        return face_rois[:3]  # up to 3 subjects
 
     def _chrom_method(self, rgb_signals: np.ndarray) -> np.ndarray:
         """
@@ -114,9 +97,73 @@ class RPPGBiologicalDetector:
 
         return xs - alpha * ys
 
+    def analyze_single_face_burst(self, frames_bgr: List[np.ndarray], face_box: Tuple[int, int, int, int]) -> Dict[str, Any]:
+        """
+        Analyze a specific face ROI across frames for cardiac rPPG pulse.
+        """
+        bx, by, bw, bh = face_box
+        rgb_series = []
+
+        for f in frames_bgr:
+            h, w = f.shape[:2]
+            # Forehead crop
+            fy1 = max(0, int(by + 0.15 * bh))
+            fy2 = min(h, int(by + 0.45 * bh))
+            fx1 = max(0, int(bx + 0.20 * bw))
+            fx2 = min(w, int(bx + 0.80 * bw))
+            roi = f[fy1:fy2, fx1:fx2]
+            if roi.size == 0:
+                roi = f[by:by+bh, bx:bx+bw]
+            if roi.size == 0:
+                continue
+            mean_bgr = np.mean(roi, axis=(0, 1))
+            rgb_series.append([mean_bgr[2], mean_bgr[1], mean_bgr[0]])
+
+        if len(rgb_series) < 4:
+            return {"score": 0.5, "bpm": 0.0, "snr_db": -10.0, "pulse_present": False}
+
+        rgb_arr = np.array(rgb_series, dtype=np.float32)
+        bvp_signal = self._chrom_method(rgb_arr)
+        bvp_signal = bvp_signal - np.mean(bvp_signal)
+
+        n = len(bvp_signal)
+        n_fft = max(128, n * 8)
+        fft_vals = np.abs(np.fft.rfft(bvp_signal, n=n_fft))
+        freqs = np.fft.rfftfreq(n_fft, d=1.0 / self.fps)
+
+        band_mask = (freqs >= self.min_hz) & (freqs <= self.max_hz)
+        band_freqs = freqs[band_mask]
+        band_power = fft_vals[band_mask]
+
+        if len(band_power) == 0 or np.max(band_power) < 1e-6:
+            return {"score": 0.85, "bpm": 0.0, "snr_db": -12.0, "pulse_present": False}
+
+        peak_idx = np.argmax(band_power)
+        peak_freq = band_freqs[peak_idx]
+        peak_bpm = float(peak_freq * 60.0)
+
+        peak_power = band_power[peak_idx] ** 2
+        total_band_power = np.sum(band_power ** 2) + 1e-6
+        snr_linear = peak_power / (total_band_power - peak_power + 1e-6)
+        snr_db = float(10.0 * np.log10(max(1e-6, snr_linear)))
+
+        pulse_present = bool(snr_db > -3.5 and (45.0 <= peak_bpm <= 170.0))
+
+        if pulse_present:
+            score = max(0.02, 0.35 - (snr_db * 0.04))
+        else:
+            score = min(0.96, 0.65 + abs(snr_db) * 0.03)
+
+        return {
+            "score": float(np.clip(score, 0.02, 0.98)),
+            "bpm": round(peak_bpm, 1),
+            "snr_db": round(snr_db, 2),
+            "pulse_present": pulse_present
+        }
+
     def analyze_burst(self, frames_bgr: List[np.ndarray]) -> Dict[str, Any]:
         """
-        Analyze sequential frame burst for biological pulse signals.
+        Analyze sequential frame burst for biological pulse signals and multi-subject comparison isolation.
         """
         if len(frames_bgr) < 4:
             return {
@@ -127,97 +174,70 @@ class RPPGBiologicalDetector:
                 "bpm_estimate": 0.0,
                 "snr_db": -10.0,
                 "details": "Insufficient frames for biological pulse tracking (requires >= 4 frames)",
-                "heatmap_boxes": []
+                "heatmap_boxes": [],
+                "subjects": []
             }
 
-        face_box, _ = self._locate_face_skin_roi(frames_bgr[0])
+        faces = self._locate_all_face_skin_rois(frames_bgr[0])
 
-        if face_box is None:
+        if not faces:
             return {
                 "score": 0.05,
                 "confidence": 0.50,
                 "face_detected": False,
                 "biological_signals_present": False,
                 "bpm_estimate": 0.0,
-                "snr_db": -5.0,
-                "details": "Non-facial scene (environmental / object footage)",
-                "heatmap_boxes": []
+                "snr_db": -10.0,
+                "details": "No human faces in burst; non-facial natural scene evaluated against optical baselines.",
+                "heatmap_boxes": [],
+                "subjects": []
             }
 
-        fx, fy, fw, fh = face_box
-        skin_rgb_series = []
-
-        for frame in frames_bgr:
-            _, skin_roi = self._locate_face_skin_roi(frame)
-            if skin_roi is not None and skin_roi.size > 0:
-                roi_rgb = cv2.cvtColor(skin_roi, cv2.COLOR_BGR2RGB)
-                mean_r = np.mean(roi_rgb[:, :, 0])
-                mean_g = np.mean(roi_rgb[:, :, 1])
-                mean_b = np.mean(roi_rgb[:, :, 2])
-                skin_rgb_series.append([mean_r, mean_g, mean_b])
-            else:
-                skin_rgb_series.append([128.0, 128.0, 128.0])
-
-        skin_rgb_arr = np.array(skin_rgb_series, dtype=np.float32)
-        bvp_raw = self._chrom_method(skin_rgb_arr)
-        bvp_detrended = bvp_raw - np.mean(bvp_raw)
-
-        n_samples = len(bvp_detrended)
-        fft_vals = np.fft.rfft(bvp_detrended)
-        fft_freqs = np.fft.rfftfreq(n_samples, d=1.0 / self.fps)
-        fft_power = np.abs(fft_vals) ** 2
-
-        cardiac_band = (fft_freqs >= self.min_hz) & (fft_freqs <= self.max_hz)
-
-        if np.any(cardiac_band) and np.sum(fft_power[cardiac_band]) > 0:
-            band_power = fft_power[cardiac_band]
-            band_freqs = fft_freqs[cardiac_band]
-            peak_idx = np.argmax(band_power)
-            dominant_freq = float(band_freqs[peak_idx])
-            bpm_estimate = round(dominant_freq * 60.0, 1)
-
-            peak_power = float(band_power[peak_idx])
-            noise_power = float(np.sum(fft_power[~cardiac_band]) + (np.sum(band_power) - peak_power) + 1e-8)
-            snr_db = round(10.0 * np.log10((peak_power + 1e-8) / noise_power), 2)
-        else:
-            bpm_estimate = 0.0
-            snr_db = -12.0
-
-        is_biological = bool(snr_db > -1.0 and 45 <= bpm_estimate <= 170)
-        
-        if is_biological:
-            score = 0.12
-            confidence = min(0.92, 0.65 + (snr_db + 2.0) * 0.05)
-            details = f"Authentic hemodynamic cardiac pulse detected ({bpm_estimate} BPM, SNR: {snr_db} dB)"
-        else:
-            if snr_db < -5.0:
-                score = 0.78
-                confidence = 0.82
-                details = f"Absent biological blood flow pulse in facial ROI (SNR: {snr_db} dB, Desynchronized Hemodynamics)"
-            else:
-                score = 0.52
-                confidence = 0.55
-                details = f"Weak/inconclusive biological signal (SNR: {snr_db} dB, possible video compression or partial occlusion)"
-
+        subjects = []
         heatmap_boxes = []
-        if score > 0.65:
-            heatmap_boxes.append({
-                "x": int(fx),
-                "y": int(fy),
-                "width": int(fw),
-                "height": int(fh),
-                "intensity": float(score),
-                "type": "missing_biological_pulse_signature"
+
+        for idx, (face_box, _) in enumerate(faces):
+            res = self.analyze_single_face_burst(frames_bgr, face_box)
+            bx, by, bw, bh = face_box
+            is_synthetic = (res["score"] > 0.50)
+            
+            position_tag = "Left Subject" if (len(faces) > 1 and idx == 0) else "Right Subject" if (len(faces) > 1 and idx == 1) else f"Subject {idx+1}"
+            label = f"{position_tag}: {'AI DEEPFAKE' if is_synthetic else 'AUTHENTIC'}"
+
+            subjects.append({
+                "index": idx,
+                "box": {"x": bx, "y": by, "width": bw, "height": bh},
+                "position": position_tag,
+                "is_synthetic": is_synthetic,
+                "score": res["score"],
+                "bpm": res["bpm"],
+                "snr_db": res["snr_db"],
+                "label": label
             })
 
+            heatmap_boxes.append({
+                "x": bx, "y": by, "width": bw, "height": bh,
+                "intensity": res["score"] if is_synthetic else 0.1,
+                "type": f"{'SYNTHETIC_DEEPFAKE' if is_synthetic else 'AUTHENTIC_FACE'}: {res['bpm']} BPM"
+            })
+
+        # Check if this is a side-by-side comparison (one real face, one synthetic face)
+        has_real = any(not s["is_synthetic"] for s in subjects)
+        has_fake = any(s["is_synthetic"] for s in subjects)
+        is_side_by_side_comparison = (len(subjects) >= 2 and has_real and has_fake)
+
+        primary_subject = subjects[0]
+        # In comparison mode, highlight both
+        overall_score = max(s["score"] for s in subjects) if has_fake else min(s["score"] for s in subjects)
+
         return {
-            "score": round(score, 4),
-            "confidence": round(confidence, 4),
+            "score": float(np.clip(overall_score, 0.02, 0.98)),
+            "confidence": 0.92 if len(faces) > 0 else 0.5,
             "face_detected": True,
-            "biological_signals_present": is_biological,
-            "bpm_estimate": bpm_estimate,
-            "snr_db": snr_db,
-            "details": details,
-            "face_box": {"x": int(fx), "y": int(fy), "width": int(fw), "height": int(fh)},
+            "biological_signals_present": any(s.get("pulse_present") for s in subjects),
+            "bpm_estimate": primary_subject["bpm"],
+            "snr_db": primary_subject["snr_db"],
+            "is_comparison": is_side_by_side_comparison,
+            "subjects": subjects,
             "heatmap_boxes": heatmap_boxes
         }
