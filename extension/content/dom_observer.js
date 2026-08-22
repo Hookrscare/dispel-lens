@@ -1,7 +1,7 @@
 /**
  * Dispel Lens — Platform DOM Observer for YouTube, TikTok, and Web Video.
- * Automatically discovers active HTML5 <video> elements, injects ambient verification badges,
- * and responds to extension popup click triggers.
+ * Subtle, non-invasive observer that activates ONLY on active video watch pages,
+ * and automatically cleans up on search/home navigation.
  */
 
 (function () {
@@ -13,7 +13,28 @@
   let activeVideo = null;
   let activeBadge = null;
 
+  function isWatchPage() {
+    const host = window.location.hostname;
+    const path = window.location.pathname;
+
+    // YouTube: ONLY on /watch or /shorts/
+    if (host.includes("youtube.com")) {
+      return path === "/watch" || path.startsWith("/shorts/");
+    }
+
+    // TikTok: ONLY on /video/ or /@user
+    if (host.includes("tiktok.com")) {
+      return path.includes("/video/") || path.startsWith("/@");
+    }
+
+    // Other sites / Localhost Demo: must have a playing video
+    const v = document.querySelector("video");
+    return v !== null && (v.offsetWidth > 200 && v.offsetHeight > 120);
+  }
+
   function findActiveVideoElement() {
+    if (!isWatchPage()) return null;
+
     // Check YouTube main video first
     const ytVideo = document.querySelector("video.html5-main-video") || 
                     document.querySelector("#movie_player video") ||
@@ -24,11 +45,11 @@
     // Check TikTok / generic HTML5 video
     const videos = Array.from(document.querySelectorAll("video"));
     for (const v of videos) {
-      if (v.offsetWidth > 150 && v.offsetHeight > 100) {
+      if (v.offsetWidth > 200 && v.offsetHeight > 120) {
         return v;
       }
     }
-    return videos[0] || null;
+    return null;
   }
 
   function getPlatformVideoId() {
@@ -40,24 +61,31 @@
     return window.location.pathname || "active_web_video";
   }
 
+  function getPlayerContainer(videoEl) {
+    if (!videoEl) return null;
+    return document.querySelector("#movie_player") || 
+           document.querySelector(".html5-video-player") || 
+           document.querySelector(".video-stream-player") ||
+           videoEl.parentElement;
+  }
+
   function runScan(openModalWhenDone = false) {
+    if (!isWatchPage()) return;
+
     const videoEl = findActiveVideoElement();
-    if (!videoEl) {
-      console.warn("[Dispel Lens] No active video element found to analyze.");
-      return;
-    }
+    if (!videoEl) return;
 
     activeVideo = videoEl;
     const platform = window.location.hostname.includes("youtube.com") ? "youtube" :
                      window.location.hostname.includes("tiktok.com") ? "tiktok" : "web";
     const videoId = getPlatformVideoId();
 
-    ensureBadgeInjected();
+    ensureBadgeInjected(videoEl);
 
     if (activeBadge) {
       activeBadge.className = "por-badge-container por-badge-scanning";
-      const statusText = activeBadge.querySelector(".por-badge-text");
-      if (statusText) statusText.textContent = "Dispel: Analyzing...";
+      const statusText = activeBadge.querySelector(".por-badge-score");
+      if (statusText) statusText.textContent = "SCANNING";
     }
 
     grabber.onFastTierResult = (fastData) => {
@@ -89,32 +117,32 @@
     grabber.captureBurst(videoEl, videoId, platform);
   }
 
-  function ensureBadgeInjected() {
-    if (document.querySelector(".por-badge-container")) {
-      activeBadge = document.querySelector(".por-badge-container");
-      return activeBadge;
-    }
-
-    // Attach to YouTube player container or document.body
-    const playerContainer = document.querySelector("#movie_player") || 
-      document.querySelector(".html5-video-player") || 
-      document.body;
+  function ensureBadgeInjected(videoEl) {
+    const playerContainer = getPlayerContainer(videoEl);
+    if (!playerContainer) return null;
 
     activeBadge = overlay.createBadge(playerContainer, () => {
       runScan(true);
     });
 
+    overlay.ensureDockInjected(playerContainer);
     overlay.createHeatmapOverlay(playerContainer);
     return activeBadge;
   }
 
   function scanDOM() {
+    if (!isWatchPage()) {
+      // Clean up all HUD elements when user is on search results or home
+      overlay.cleanupNonWatchDOM();
+      activeVideo = null;
+      activeBadge = null;
+      return;
+    }
+
     const videoEl = findActiveVideoElement();
     if (!videoEl) return;
 
-    if (!document.querySelector(".por-badge-container")) {
-      ensureBadgeInjected();
-    }
+    ensureBadgeInjected(videoEl);
 
     if (videoEl !== activeVideo) {
       activeVideo = videoEl;
@@ -122,21 +150,20 @@
       videoEl.addEventListener("play", () => {
         chrome.storage.local.get("autoScan", ({ autoScan = true }) => {
           if (autoScan) {
-            setTimeout(() => runScan(false), 800);
+            setTimeout(() => runScan(false), 900);
           }
         });
       }, { once: false });
 
       if (!videoEl.paused && videoEl.currentTime > 0) {
-        setTimeout(() => runScan(false), 600);
+        setTimeout(() => runScan(false), 700);
       }
     }
   }
 
-  // Listen for manual scan trigger from popup extension button
+  // Listen for manual scan trigger from popup extension button or Cmd+Shift+D shortcut
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message.action === "TRIGGER_ACTIVE_SCAN" || message.type === "TRIGGER_ACTIVE_SCAN") {
-      console.log("[Dispel Lens] Manual scan triggered via extension popup.");
       runScan(true);
       sendResponse({ status: "SCAN_STARTED" });
       return true;
@@ -147,9 +174,9 @@
   const observer = new MutationObserver(() => scanDOM());
   observer.observe(document.documentElement, { childList: true, subtree: true });
 
-  window.addEventListener("yt-navigate-finish", () => setTimeout(scanDOM, 400));
-  window.addEventListener("popstate", () => setTimeout(scanDOM, 400));
-  window.addEventListener("load", () => setTimeout(scanDOM, 400));
+  window.addEventListener("yt-navigate-finish", () => setTimeout(scanDOM, 300));
+  window.addEventListener("popstate", () => setTimeout(scanDOM, 300));
+  window.addEventListener("load", () => setTimeout(scanDOM, 300));
 
   setInterval(scanDOM, 2000);
   scanDOM();

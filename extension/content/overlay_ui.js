@@ -1,7 +1,7 @@
 /**
- * Dispel Lens — In-Player Ambient HUD, 3D Glass Dock & Multi-Subject Comparison Reality Inspector.
+ * Dispel Lens — In-Player Subtle HUD, 3D Glass Dock & Multi-Subject Comparison Reality Inspector.
  * Apple Vision Pro liquid glassmorphism, 3D perspective depth, and neon quantum optics.
- * Includes Side-by-Side Comparison Isolation (Real vs Deepfake).
+ * Scoped strictly inside the active video player with clean auto-hiding.
  */
 
 class OverlayUI {
@@ -13,7 +13,6 @@ class OverlayUI {
     this.activeXRayMode = "none";
     this.ecgAnimationId = null;
     this._initModalDOM();
-    this._initFloatingDockDOM();
   }
 
   _getDispelLensSvg(size = 18, color = "#00E5FF") {
@@ -26,27 +25,32 @@ class OverlayUI {
     `;
   }
 
-  _initFloatingDockDOM() {
-    if (document.getElementById("por-optics-dock")) return;
+  ensureDockInjected(parentContainer) {
+    if (!parentContainer) return;
+    let dock = parentContainer.querySelector("#por-optics-dock");
+    if (dock) return dock;
 
-    const dock = document.createElement("div");
+    // Remove any orphaned docks
+    document.querySelectorAll("#por-optics-dock").forEach(el => el.remove());
+
+    dock = document.createElement("div");
     dock.id = "por-optics-dock";
     dock.className = "por-optics-dock";
     dock.innerHTML = `
       <div class="dock-handle" title="Dispel X-Ray Reality Vision">
-        ${this._getDispelLensSvg(16, "#00E5FF")}
-        <span>X-RAY VISION</span>
+        ${this._getDispelLensSvg(14, "#00E5FF")}
+        <span>X-RAY</span>
       </div>
       <div class="dock-buttons">
         <button class="dock-btn active" data-mode="none" title="Normal Video Stream">NORMAL</button>
-        <button class="dock-btn" data-mode="prnu_noise" title="Live CMOS Hardware Sensor Noise Residual">🩻 SENSOR NOISE</button>
-        <button class="dock-btn" data-mode="ecg_pulse" title="Live Biometric Photoplethysmography ECG Pulse">💓 ECG PULSE</button>
+        <button class="dock-btn" data-mode="prnu_noise" title="Live CMOS Hardware Sensor Noise Residual">🩻 NOISE</button>
+        <button class="dock-btn" data-mode="ecg_pulse" title="Live Biometric Photoplethysmography ECG Pulse">💓 ECG</button>
         <button class="dock-btn" data-mode="spectral_lattice" title="Latent Diffusion Upsampler Checkerboard Grid">🌈 LATTICE</button>
-        <button class="dock-btn dock-btn-viral" id="dock-viral-btn" title="Generate 1-Click Cryptographic Proof Card">📸 PROOF CARD</button>
+        <button class="dock-btn dock-btn-viral" id="dock-viral-btn" title="Generate 1-Click Cryptographic Proof Card">📸 PROOF</button>
       </div>
     `;
 
-    document.body.appendChild(dock);
+    parentContainer.appendChild(dock);
 
     dock.querySelectorAll(".dock-btn[data-mode]").forEach(btn => {
       btn.addEventListener("click", (e) => {
@@ -64,6 +68,8 @@ class OverlayUI {
         this.generateAndCopyViralProofCard();
       });
     }
+
+    return dock;
   }
 
   _initModalDOM() {
@@ -91,8 +97,8 @@ class OverlayUI {
         </div>
 
         <div class="por-modal-actions">
-          <button class="por-btn por-btn-viral" id="por-modal-viral-btn">📸 COPY PROOF CARD TO CLIPBOARD</button>
-          <button class="por-btn por-btn-secondary" id="por-toggle-heatmap-btn">TOGGLE FORENSIC HEATMAP</button>
+          <button class="por-btn por-btn-viral" id="por-modal-viral-btn">📸 COPY PROOF CARD</button>
+          <button class="por-btn por-btn-secondary" id="por-toggle-heatmap-btn">TOGGLE HEATMAP</button>
           <button class="por-btn por-btn-secondary" id="por-export-cert-btn">EXPORT CERTIFICATE</button>
           <button class="por-btn por-btn-primary" id="por-rescan-btn">RE-PROBE STREAM</button>
         </div>
@@ -138,25 +144,27 @@ class OverlayUI {
           }
         }
       } catch (e) {
-        alert("Certificate Generator is connecting to dispel.cloud...");
+        alert("Certificate Generator connecting to dispel.cloud...");
       }
     });
   }
 
   createBadge(parentContainer, onScanClick) {
-    if (document.querySelector(".por-badge-container")) {
-      return document.querySelector(".por-badge-container");
-    }
+    if (!parentContainer) return null;
+    let badge = parentContainer.querySelector(".por-badge-container");
+    if (badge) return badge;
 
-    const badge = document.createElement("div");
+    document.querySelectorAll(".por-badge-container").forEach(el => el.remove());
+
+    badge = document.createElement("div");
     badge.className = "por-badge-container por-badge-scanning";
     badge.title = "Dispel Lens — Click to inspect reality forensic telemetry";
     badge.innerHTML = `
       <div class="por-shield-icon">
-        ${this._getDispelLensSvg(16, "#00E5FF")}
+        ${this._getDispelLensSvg(14, "#00E5FF")}
       </div>
-      <span class="por-badge-text">DISPEL: PROBING</span>
-      <span class="por-badge-score">--</span>
+      <span class="por-badge-text">DISPEL</span>
+      <span class="por-badge-score">PROBING</span>
     `;
 
     badge.addEventListener("click", (e) => {
@@ -168,7 +176,7 @@ class OverlayUI {
       }
     });
 
-    document.body.appendChild(badge);
+    parentContainer.appendChild(badge);
     return badge;
   }
 
@@ -187,7 +195,7 @@ class OverlayUI {
 
     badgeEl.innerHTML = `
       <div class="por-shield-icon">
-        ${this._getDispelLensSvg(16, color)}
+        ${this._getDispelLensSvg(14, color)}
       </div>
       <span class="por-badge-text">${label}</span>
       <span class="por-badge-score">${scorePct}</span>
@@ -212,27 +220,28 @@ class OverlayUI {
       : isAuthentic 
       ? Math.round((1.0 - deepData.ai_probability) * 100) + "%" 
       : Math.round(deepData.ai_probability * 100) + "% AI";
-    const cacheTag = deepData.cached ? `<span style="font-family: monospace; font-size: 8.5px; background: rgba(0,229,255,0.2); color: #00E5FF; padding: 1px 4px; border-radius: 3px; margin-left: 2px;">⚡0ms</span>` : "";
 
     badgeEl.innerHTML = `
       <div class="por-shield-icon">
-        ${this._getDispelLensSvg(16, color)}
+        ${this._getDispelLensSvg(14, color)}
       </div>
       <span class="por-badge-text">${label}</span>
       <span class="por-badge-score">${scorePct}</span>
-      ${cacheTag}
     `;
   }
 
-  createHeatmapOverlay(videoContainer) {
-    let canvas = document.querySelector(".por-heatmap-overlay");
+  createHeatmapOverlay(parentContainer) {
+    if (!parentContainer) return null;
+    let canvas = parentContainer.querySelector(".por-heatmap-overlay");
     if (!canvas) {
       canvas = document.createElement("canvas");
       canvas.className = "por-heatmap-overlay";
-      canvas.style.position = "fixed";
+      canvas.style.position = "absolute";
+      canvas.style.top = "0";
+      canvas.style.left = "0";
       canvas.style.pointerEvents = "none";
-      canvas.style.zIndex = "2147483646";
-      document.body.appendChild(canvas);
+      canvas.style.zIndex = "40";
+      parentContainer.appendChild(canvas);
     }
     this.heatmapCanvas = canvas;
     return canvas;
@@ -265,8 +274,6 @@ class OverlayUI {
 
   renderSensorNoiseOverlay(video) {
     const rect = video.getBoundingClientRect();
-    this.heatmapCanvas.style.top = rect.top + "px";
-    this.heatmapCanvas.style.left = rect.left + "px";
     this.heatmapCanvas.width = rect.width;
     this.heatmapCanvas.height = rect.height;
     const ctx = this.heatmapCanvas.getContext("2d");
@@ -296,8 +303,6 @@ class OverlayUI {
       if (this.activeXRayMode !== "ecg_pulse" || !video) return;
 
       const rect = video.getBoundingClientRect();
-      this.heatmapCanvas.style.top = rect.top + "px";
-      this.heatmapCanvas.style.left = rect.left + "px";
       this.heatmapCanvas.width = rect.width;
       this.heatmapCanvas.height = rect.height;
       const ctx = this.heatmapCanvas.getContext("2d");
@@ -344,8 +349,6 @@ class OverlayUI {
 
   renderLatticeOverlay(video) {
     const rect = video.getBoundingClientRect();
-    this.heatmapCanvas.style.top = rect.top + "px";
-    this.heatmapCanvas.style.left = rect.left + "px";
     this.heatmapCanvas.width = rect.width;
     this.heatmapCanvas.height = rect.height;
     const ctx = this.heatmapCanvas.getContext("2d");
@@ -374,8 +377,6 @@ class OverlayUI {
     if (!this.heatmapCanvas || !videoElement || !this.isHeatmapVisible) return;
     
     const rect = videoElement.getBoundingClientRect();
-    this.heatmapCanvas.style.top = rect.top + "px";
-    this.heatmapCanvas.style.left = rect.left + "px";
     this.heatmapCanvas.width = rect.width;
     this.heatmapCanvas.height = rect.height;
     const ctx = this.heatmapCanvas.getContext("2d");
@@ -419,6 +420,13 @@ class OverlayUI {
     }
   }
 
+  cleanupNonWatchDOM() {
+    document.querySelectorAll(".por-badge-container").forEach(el => el.remove());
+    document.querySelectorAll("#por-optics-dock").forEach(el => el.remove());
+    document.querySelectorAll(".por-heatmap-overlay").forEach(el => el.remove());
+    this.closeModal();
+  }
+
   async generateAndCopyViralProofCard() {
     const data = this.currentData || {
       verdict: "AUTHENTIC",
@@ -456,7 +464,6 @@ class OverlayUI {
     ctx.font = "14px monospace";
     ctx.fillText(`ATTESTATION HASH: SHA256-${Date.now().toString(16).toUpperCase()} · DISPEL.CLOUD/VERIFY`, 60, 96);
 
-    // Main Banner
     ctx.fillStyle = isComparison ? "rgba(255, 184, 0, 0.12)" : isAuth ? "rgba(0, 229, 153, 0.12)" : "rgba(255, 51, 102, 0.12)";
     ctx.fillRect(60, 130, 1080, 160);
     ctx.strokeStyle = isComparison ? "rgba(255, 184, 0, 0.5)" : isAuth ? "rgba(0, 229, 153, 0.5)" : "rgba(255, 51, 102, 0.5)";

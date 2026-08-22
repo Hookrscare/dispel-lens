@@ -201,12 +201,15 @@ class SpatialFFTDetector:
         artifacts_detected = []
 
         # A. Neural Upsampler Lattice Harmonics
+        has_healthy_prnu = (kurtosis_res < 5.5 and std_res > 1.2)
         if severe_patches >= 6 and max_patch_peak > 35.0:
             score = max(score, 0.88)
             artifacts_detected.append(f"neural_upsampler_checkerboard_lattice ({severe_patches} patches, {max_patch_peak:.1f}x peak)")
-        elif severe_patches >= 2 or max_patch_peak > 28.0:
+        elif severe_patches >= 4 or (severe_patches >= 2 and max_patch_peak > 32.0 and not has_healthy_prnu):
             score = max(score, 0.65)
             artifacts_detected.append(f"periodic_upsampling_lattice_harmonics ({severe_patches} patches)")
+        elif severe_patches >= 2 and has_healthy_prnu:
+            score = max(score, 0.12)
 
         # B. Denoised Diffusion Oversmoothing & Non-Gaussian Residual Kurtosis
         if kurtosis_res > 8.0 and std_res < 0.9:
