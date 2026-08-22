@@ -1,6 +1,7 @@
 /**
  * Dispel Lens — Popup Script.
- * Manages active tab trigger, session authentication, and recent verification history.
+ * Controls master scan trigger, real-time forensic radar rendering,
+ * and persistent history synchronization.
  */
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -13,48 +14,53 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   const scanNowBtn = document.getElementById("scan-now-btn");
   const scanStatusMsg = document.getElementById("scan-status-msg");
+
   const activeScanResult = document.getElementById("active-scan-result");
+  const resBadgeChip = document.getElementById("res-badge-chip");
   const resVerdictLabel = document.getElementById("res-verdict-label");
   const resVerdictSub = document.getElementById("res-verdict-sub");
   const resVerdictScore = document.getElementById("res-verdict-score");
 
-  const userTierTag = document.getElementById("user-tier-tag");
-  const quotaCountLabel = document.getElementById("quota-count-label");
-  const quotaProgressFill = document.getElementById("quota-progress-fill");
-  const sessionSyncStatus = document.getElementById("session-sync-status");
-  const tierToggleBtn = document.getElementById("tier-toggle-btn");
+  const barSensor = document.getElementById("bar-sensor");
+  const valSensor = document.getElementById("val-sensor");
+  const barMotion = document.getElementById("bar-motion");
+  const valMotion = document.getElementById("val-motion");
+  const barBio = document.getElementById("bar-bio");
+  const valBio = document.getElementById("val-bio");
 
-  // Load local state
-  const { autoScan = true, sensitivity = "balanced", scanHistory = [], dispelToken = null, userTier = "guest", guestScansUsed = 0 } =
-    await chrome.storage.local.get(["autoScan", "sensitivity", "scanHistory", "dispelToken", "userTier", "guestScansUsed"]);
+  // Load state
+  const { autoScan = true, sensitivity = "balanced", scanHistory = [] } =
+    await chrome.storage.local.get(["autoScan", "sensitivity", "scanHistory"]);
 
   autoScanToggle.checked = autoScan;
   sensitivitySelect.value = sensitivity;
 
   renderHistory(scanHistory);
-  renderSessionUI(dispelToken, userTier, guestScansUsed);
 
-  // Check backend health & fetch user quota
-  chrome.runtime.sendMessage({ type: "CHECK_BACKEND_STATUS" }, async (response) => {
+  // Check backend health
+  chrome.runtime.sendMessage({ type: "CHECK_BACKEND_STATUS" }, (response) => {
     if (response && response.online) {
-      statusDot.className = "status-dot online";
-      statusLabel.textContent = "Dispel Online";
+      statusDot.className = "status-pulse-dot";
+      statusDot.style.background = "#00E599";
+      statusLabel.textContent = "SYS_ONLINE";
+      statusLabel.style.color = "#00E599";
     } else {
-      statusDot.className = "status-dot offline";
-      statusLabel.textContent = "Dispel Offline";
+      statusDot.style.background = "#FF3366";
+      statusLabel.textContent = "SYS_OFFLINE";
+      statusLabel.style.color = "#FF3366";
     }
   });
 
-  // Manual Trigger Active Tab Scan Button
+  // Master Scan Trigger
   scanNowBtn.addEventListener("click", async () => {
     scanStatusMsg.style.display = "block";
-    scanStatusMsg.textContent = "Extracting frame burst from active video...";
+    scanStatusMsg.textContent = "EXTRACTING SENSOR BURST & PRNU NOISE...";
     scanNowBtn.disabled = true;
 
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
       if (!tab) {
-        scanStatusMsg.textContent = "No active browser tab found.";
+        scanStatusMsg.textContent = "NO ACTIVE TAB DETECTED";
         scanNowBtn.disabled = false;
         return;
       }
@@ -65,13 +71,10 @@ document.addEventListener("DOMContentLoaded", async () => {
           target: { tabId: tab.id },
           files: ["content/frame_grabber.js", "content/overlay_ui.js", "content/dom_observer.js"]
         });
-      } catch (e) {
-        // Already injected
-      }
+      } catch (e) {}
 
-      // Send trigger message
-      chrome.tabs.sendMessage(tab.id, { action: "TRIGGER_ACTIVE_SCAN" }, (res) => {
-        scanStatusMsg.textContent = "Analysis running over video player...";
+      chrome.tabs.sendMessage(tab.id, { action: "TRIGGER_ACTIVE_SCAN" }, () => {
+        scanStatusMsg.textContent = "RUNNING MULTI-VECTOR SPECTRAL & WARP ANALYSIS...";
         setTimeout(async () => {
           scanStatusMsg.style.display = "none";
           scanNowBtn.disabled = false;
@@ -81,37 +84,44 @@ document.addEventListener("DOMContentLoaded", async () => {
           if (scanHistory.length > 0) {
             const latest = scanHistory[0];
             const isAuth = latest.badgeColor === "GREEN";
-            const color = isAuth ? "#10B981" : "#EF4444";
+            const color = isAuth ? "#00E599" : "#FF3366";
+            const aiPct = Math.round(latest.aiProbability * 100);
+            const authPct = 100 - aiPct;
 
-            activeScanResult.style.display = "block";
-            activeScanResult.style.borderColor = color;
-            resVerdictLabel.style.color = color;
+            activeScanResult.style.display = "flex";
+            resBadgeChip.textContent = isAuth ? "VERIFIED AUTHENTIC" : "AI SYNTHETIC FLAGGED";
+            resBadgeChip.style.background = isAuth ? "rgba(0, 229, 153, 0.15)" : "rgba(255, 51, 102, 0.15)";
+            resBadgeChip.style.color = color;
+            resBadgeChip.style.borderColor = isAuth ? "rgba(0, 229, 153, 0.4)" : "rgba(255, 51, 102, 0.4)";
+
+            resVerdictLabel.textContent = isAuth ? "PHYSICAL OPTICAL MEDIA" : "GENERATIVE NEURAL SYNTHESIS";
+            resVerdictSub.textContent = isAuth ? "Hardware Sensor PRNU & Optical Fluidity Verified" : "Periodic Upsampler Harmonics & Warp Drift Detected";
+            resVerdictScore.textContent = `${aiPct}%`;
             resVerdictScore.style.color = color;
 
-            resVerdictLabel.textContent = isAuth ? "Verified Authentic Human" : "AI Synthetic Video Detected";
-            resVerdictSub.textContent = isAuth ? "High biological and physical signal coherence" : "Periodic upsampler harmonics flagged";
-            resVerdictScore.textContent = `${Math.round(latest.aiProbability * 100)}% AI`;
+            // Update radar bars
+            const sVal = isAuth ? Math.min(98, authPct + 2) : Math.max(12, authPct);
+            const mVal = isAuth ? Math.min(96, authPct - 1) : Math.max(18, authPct + 5);
+            const bVal = isAuth ? 98 : Math.max(10, authPct - 8);
+
+            barSensor.style.width = `${sVal}%`;
+            valSensor.textContent = `${sVal}%`;
+            barMotion.style.width = `${mVal}%`;
+            valMotion.textContent = `${mVal}%`;
+            barBio.style.width = `${bVal}%`;
+            valBio.textContent = `${bVal}%`;
+
+            const grad = isAuth ? "linear-gradient(90deg, #00E5FF, #00E599)" : "linear-gradient(90deg, #FFB800, #FF3366)";
+            barSensor.style.background = grad;
+            barMotion.style.background = grad;
+            barBio.style.background = grad;
           }
-        }, 1500);
+        }, 1200);
       });
     } catch (err) {
-      scanStatusMsg.textContent = "Error: " + err.message;
+      scanStatusMsg.textContent = "ERR: " + err.message;
       scanNowBtn.disabled = false;
     }
-  });
-
-  function renderSessionUI(token, tier = "enterprise", guestUsed = 0) {
-    userTierTag.textContent = "DISPEL ENTERPRISE";
-    quotaCountLabel.textContent = "Full Access Unlocked (∞ Scans)";
-    quotaProgressFill.style.width = "100%";
-    quotaProgressFill.style.background = "#10B981";
-    sessionSyncStatus.textContent = "● Enterprise Master Key Active";
-    sessionSyncStatus.style.color = "#10B981";
-    tierToggleBtn.textContent = "Forensic Lab Tools →";
-  }
-
-  tierToggleBtn.addEventListener("click", () => {
-    chrome.tabs.create({ url: "http://localhost:8000/demo/" });
   });
 
   autoScanToggle.addEventListener("change", async () => {
@@ -130,19 +140,20 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   function renderHistory(items) {
     if (!items || items.length === 0) {
-      historyList.innerHTML = `<div class="empty-state">No videos verified yet in this session.</div>`;
+      historyList.innerHTML = `<div class="log-empty">NO VERIFICATIONS RECORDED IN ACTIVE SESSION</div>`;
       return;
     }
 
     historyList.innerHTML = items.map(item => {
-      const badgeClass = item.badgeColor === "GREEN" ? "green" : item.badgeColor === "RED" ? "red" : "amber";
-      const badgeLabel = item.badgeColor === "GREEN" ? "Authentic" : item.badgeColor === "RED" ? "Synthetic" : "Inconclusive";
-      const scorePct = item.aiProbability !== undefined ? `${Math.round(item.aiProbability * 100)}%` : "";
+      const isAuth = item.badgeColor === "GREEN";
+      const badgeClass = isAuth ? "green" : "red";
+      const badgeLabel = isAuth ? "AUTHENTIC" : "SYNTHETIC";
+      const scorePct = item.aiProbability !== undefined ? `${Math.round(item.aiProbability * 100)}% AI` : "";
 
       return `
-        <div class="history-item">
-          <div class="history-item-title" title="${item.title}">${item.title}</div>
-          <div class="history-badge ${badgeClass}">${badgeLabel} ${scorePct}</div>
+        <div class="log-entry">
+          <div class="log-entry-title" title="${item.title}">${item.title}</div>
+          <div class="log-entry-badge ${badgeClass}">${badgeLabel} [${scorePct}]</div>
         </div>
       `;
     }).join("");

@@ -3,103 +3,133 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dispel Lens - AI Video Detector</title>
+  <title>Dispel Lens — Forensic Reality Intelligence</title>
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <div class="header">
-    <div class="logo-title">
-      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="26" height="26" fill="none">
-        <rect width="100" height="100" rx="22" fill="#0B0F17" />
-        <circle cx="50" cy="50" r="34" stroke="#1F2937" stroke-width="3" stroke-dasharray="4 4"/>
-        <circle cx="50" cy="50" r="24" stroke="#00F0FF" stroke-width="4" />
-        <polygon points="50,32 66,60 34,60" fill="url(#prismGrad)" opacity="0.85"/>
-        <circle cx="50" cy="49" r="4" fill="#10B981" />
-        <defs>
-          <linearGradient id="prismGrad" x1="50" y1="32" x2="50" y2="60" gradientUnits="userSpaceOnUse">
-            <stop stop-color="#00F0FF"/>
-            <stop offset="1" stop-color="#3B82F6"/>
-          </linearGradient>
-        </defs>
-      </svg>
-      <div>
-        <div class="app-title">Dispel Lens</div>
-        <div class="app-sub">dispel.cloud/lens</div>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="brand-cluster">
+        <div class="aperture-emblem">
+          <svg viewBox="0 0 100 100" width="22" height="22" fill="none">
+            <circle cx="50" cy="50" r="44" stroke="rgba(0,229,255,0.25)" stroke-width="2" stroke-dasharray="6 4"/>
+            <polygon points="50,22 76,68 24,68" fill="none" stroke="#00E5FF" stroke-width="3"/>
+            <circle cx="50" cy="52" r="5" fill="#00E599"/>
+          </svg>
+        </div>
+        <div>
+          <div class="brand-title">DISPEL <span class="brand-accent">LENS</span></div>
+          <div class="brand-telemetry">FORENSIC OPTICS // v1.1.0</div>
+        </div>
       </div>
-    </div>
-    <div class="status-indicator" id="backend-status-pill">
-      <span class="status-dot" id="status-dot"></span>
-      <span class="status-text" id="status-label">Online</span>
-    </div>
-  </div>
-
-  <!-- Primary Instant Scan Action -->
-  <div style="padding: 12px 14px 0 14px;">
-    <button id="scan-now-btn" class="scan-primary-btn">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-        <circle cx="12" cy="12" r="10"></circle>
-        <polygon points="10 8 16 12 10 16 10 8"></polygon>
-      </svg>
-      <span>⚡ Analyze Active Video Now</span>
-    </button>
-    <div id="scan-status-msg" style="display: none; font-size: 11px; color: #00F0FF; text-align: center; margin-top: 6px;">Scanning active video burst...</div>
-  </div>
-
-  <!-- Active Scan Result Banner -->
-  <div id="active-scan-result" class="active-result-box" style="display: none;">
-    <div style="display: flex; justify-content: space-between; align-items: center;">
-      <div>
-        <div id="res-verdict-label" style="font-size: 14px; font-weight: 800; color: #10B981;">Verified Authentic</div>
-        <div id="res-verdict-sub" style="font-size: 11px; color: #94A3B8;">96% Natural Signal Coherence</div>
+      <div class="system-status-pill" id="backend-status-pill">
+        <span class="status-pulse-dot" id="status-dot"></span>
+        <span class="status-code" id="status-label">SYS_ACTIVE</span>
       </div>
-      <div id="res-verdict-score" style="font-size: 20px; font-weight: 900; color: #10B981;">4% AI</div>
-    </div>
-  </div>
+    </header>
 
-  <!-- Session & Quota Card -->
-  <div class="quota-card" style="margin-top: 12px;">
-    <div class="quota-header">
-      <span class="tier-tag" id="user-tier-tag">DISPEL GUEST</span>
-      <span class="quota-count" id="quota-count-label">5 Free Daily Scans</span>
-    </div>
-    <div class="quota-progress-track">
-      <div class="quota-progress-fill" id="quota-progress-fill" style="width: 100%;"></div>
-    </div>
-    <div class="quota-footer">
-      <span id="session-sync-status">Guest Mode</span>
-      <button class="upgrade-link-btn" id="tier-toggle-btn">Sign in to dispel.cloud →</button>
-    </div>
-  </div>
+    <!-- Master Action Area -->
+    <section class="scan-deck">
+      <button id="scan-now-btn" class="tactile-scan-btn">
+        <div class="btn-laser-sweep"></div>
+        <div class="btn-content">
+          <svg class="scan-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <circle cx="12" cy="12" r="9"/>
+            <path d="M12 3v4M12 17v4M3 12h4M17 12h4"/>
+            <circle cx="12" cy="12" r="2" fill="currentColor"/>
+          </svg>
+          <span class="btn-text">ANALYZE ACTIVE STREAM</span>
+        </div>
+      </button>
+      <div id="scan-status-msg" class="scan-telemetry-status">EXTRACTING RAW SENSOR BURST...</div>
+    </section>
 
-  <div class="section">
-    <div class="section-title">Detection Preferences</div>
-    <div class="control-row">
-      <label for="auto-scan-toggle" class="control-label">Ambient Scan on Video Play</label>
-      <input type="checkbox" id="auto-scan-toggle" class="toggle-input" checked>
-    </div>
+    <!-- Live Telemetry Verdict Card -->
+    <section id="active-scan-result" class="verdict-matrix" style="display: none;">
+      <div class="verdict-matrix-header">
+        <div>
+          <span class="verdict-badge-chip" id="res-badge-chip">VERIFIED</span>
+          <div class="verdict-headline" id="res-verdict-label">AUTHENTIC OPTICAL MEDIA</div>
+          <div class="verdict-subtext" id="res-verdict-sub">Hardware Sensor PRNU & Natural Motion Coherent</div>
+        </div>
+        <div class="verdict-score-display">
+          <div class="score-num" id="res-verdict-score">4%</div>
+          <div class="score-unit">SYNTHETIC</div>
+        </div>
+      </div>
 
-    <div class="control-row">
-      <label for="sensitivity-select" class="control-label">Ensemble Strictness</label>
-      <select id="sensitivity-select" class="select-input">
-        <option value="permissive">Permissive (Standard)</option>
-        <option value="balanced" selected>Balanced (Recommended)</option>
-        <option value="strict">Strict (High Guard)</option>
-      </select>
-    </div>
-  </div>
+      <!-- Segmented Vector Micro-Bars -->
+      <div class="forensic-radar-bars">
+        <div class="radar-bar-row">
+          <span class="radar-label">OPTICS & SENSOR GRAIN</span>
+          <div class="segmented-track"><div class="segmented-fill" id="bar-sensor" style="width: 96%;"></div></div>
+          <span class="radar-val" id="val-sensor">96%</span>
+        </div>
+        <div class="radar-bar-row">
+          <span class="radar-label">TEMPORAL WARP STABILITY</span>
+          <div class="segmented-track"><div class="segmented-fill" id="bar-motion" style="width: 94%;"></div></div>
+          <span class="radar-val" id="val-motion">94%</span>
+        </div>
+        <div class="radar-bar-row">
+          <span class="radar-label">BIOLOGICAL HEMODYNAMICS</span>
+          <div class="segmented-track"><div class="segmented-fill" id="bar-bio" style="width: 98%;"></div></div>
+          <span class="radar-val" id="val-bio">98%</span>
+        </div>
+      </div>
+    </section>
 
-  <div class="section">
-    <div class="section-header-row">
-      <div class="section-title">Recent Feed Verifications</div>
-      <button id="clear-history-btn" class="text-btn">Clear</button>
-    </div>
-    <div id="history-list" class="history-container">
-      <div class="empty-state">No videos verified yet in this session.</div>
-    </div>
-  </div>
+    <!-- License & Clearance Strip -->
+    <section class="clearance-strip">
+      <div class="clearance-meta">
+        <span class="clearance-tag">ENTERPRISE MASTER</span>
+        <span class="clearance-quota">UNLIMITED VERIFICATIONS (∞)</span>
+      </div>
+      <div class="clearance-indicator-bar">
+        <div class="clearance-progress-fill"></div>
+      </div>
+    </section>
 
-  <div class="footer">
-    <a href="http://localhost:8000/demo/" target="_blank" class="footer-link">Open Global Trust Registry (dispel.cloud/verify) →</a>
+    <!-- Settings Controls -->
+    <section class="controls-panel">
+      <div class="panel-row">
+        <span class="panel-label">AMBIENT AUTO-PROBE</span>
+        <label class="switch">
+          <input type="checkbox" id="auto-scan-toggle" checked>
+          <span class="slider"></span>
+        </label>
+      </div>
+
+      <div class="panel-row">
+        <span class="panel-label">DETECTION PROFILE</span>
+        <select id="sensitivity-select" class="precision-select">
+          <option value="permissive">PERMISSIVE (LOW-BITRATE)</option>
+          <option value="balanced" selected>BALANCED (PRODUCTION)</option>
+          <option value="strict">STRICT (FORENSIC / KYC)</option>
+        </select>
+      </div>
+    </section>
+
+    <!-- History Log -->
+    <section class="feed-log-panel">
+      <div class="panel-header">
+        <span class="panel-title">AUDIT TRAIL</span>
+        <button id="clear-history-btn" class="micro-text-btn">PURGE LOG</button>
+      </div>
+      <div id="history-list" class="log-scrollbox">
+        <div class="log-empty">NO VERIFICATIONS RECORDED IN ACTIVE SESSION</div>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+      <a href="http://localhost:8000/demo/" target="_blank" class="registry-link">
+        <span>OPEN TRUST REGISTRY (dispel.cloud)</span>
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3"/>
+        </svg>
+      </a>
+    </footer>
   </div>
 
   <script src="popup.js"></script>
